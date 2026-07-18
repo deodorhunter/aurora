@@ -22,7 +22,7 @@ import { shouldShowToolbar } from '@plone/layout/helpers';
 
 import stylesheet from '@plone/aurora/.plone/cmsui.css?url';
 import { ploneContentContext } from '@plone/aurora/app/middleware.server';
-import { EmbeddedDevTools } from 'react-router-devtools/client';
+import { withViteDevTools } from 'react-router-devtools/client';
 
 export const meta: MetaFunction<unknown, { root: RootLoader }> = ({
   matches,
@@ -73,7 +73,7 @@ export async function loader({
   return { locale, content };
 }
 
-export default function Index() {
+function Index() {
   const { locale, content } = useLoaderData<typeof loader>();
   const { i18n } = useTranslation();
   const navigate = useNavigate();
@@ -108,21 +108,13 @@ export default function Index() {
         </RACRouterProvider>
         <ScrollRestoration />
         <Scripts />
-        {import.meta.env.DEV && (
-          <div
-            style={{
-              position: 'fixed',
-              bottom: 0,
-              left: 0,
-              right: 0,
-              height: '40vh',
-              zIndex: 2147483647,
-            }}
-          >
-            <EmbeddedDevTools />
-          </div>
-        )}
       </body>
     </html>
   );
 }
+
+// Toggleable floating trigger (bottom-right, closed by default); the panel
+// opens on click or via the devtools' own hotkey (Ctrl+~).
+export default import.meta.env.DEV
+  ? withViteDevTools(Index, { tanstackConfig: { defaultOpen: false } })
+  : Index;
