@@ -37,6 +37,7 @@ import config from '@plone/registry';
 import styles from '@plone/layout/slots/App/App.module.css';
 import stylesheet from '@plone/aurora/.plone/publicui.css?url';
 import { ContentTypesMenu } from '../components/Toolbar/ContentTypesMenu';
+import { EmbeddedDevTools } from 'react-router-devtools/client';
 
 export const meta: MetaFunction<unknown, { root: RootLoader }> = ({
   matches,
@@ -193,6 +194,20 @@ export default function Index() {
         </RACRouterProvider>
         <ScrollRestoration />
         <Scripts />
+        {import.meta.env.DEV && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '40vh',
+              zIndex: 2147483647,
+            }}
+          >
+            <EmbeddedDevTools />
+          </div>
+        )}
       </body>
     </html>
   );

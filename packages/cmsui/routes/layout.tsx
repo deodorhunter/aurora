@@ -22,6 +22,7 @@ import { shouldShowToolbar } from '@plone/layout/helpers';
 
 import stylesheet from '@plone/aurora/.plone/cmsui.css?url';
 import { ploneContentContext } from '@plone/aurora/app/middleware.server';
+import { EmbeddedDevTools } from 'react-router-devtools/client';
 
 export const meta: MetaFunction<unknown, { root: RootLoader }> = ({
   matches,
@@ -107,6 +108,20 @@ export default function Index() {
         </RACRouterProvider>
         <ScrollRestoration />
         <Scripts />
+        {import.meta.env.DEV && (
+          <div
+            style={{
+              position: 'fixed',
+              bottom: 0,
+              left: 0,
+              right: 0,
+              height: '40vh',
+              zIndex: 2147483647,
+            }}
+          >
+            <EmbeddedDevTools />
+          </div>
+        )}
       </body>
     </html>
   );

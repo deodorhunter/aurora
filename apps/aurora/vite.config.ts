@@ -8,6 +8,7 @@ import babel from 'vite-plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
 import devtoolsJson from 'vite-plugin-devtools-json';
+import { reactRouterDevTools } from 'react-router-devtools';
 
 export default defineConfig(({ command, mode, isSsrBuild }) => {
   const analyze = process.env.ANALYZE === 'true';
@@ -16,6 +17,22 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
 
   const baseConfig = {
     plugins: [
+      // Source tagging (data-tsd-source) stamps each element with the file
+      // path of its originating component. Some components are resolved
+      // through pnpm-symlinked add-on packages, where the SSR and client
+      // builds can resolve a shadowed/customized component's path
+      // differently, mismatching the attribute and breaking hydration.
+      reactRouterDevTools({
+        tanstackViteConfig: {
+          injectSource: { enabled: false },
+          eventBusConfig: { enabled: false },
+          // Console piping between client/server creates a feedback loop
+          // here (each piped [Server] log gets re-captured and re-piped),
+          // spamming the dev server log unboundedly.
+          enhancedLogs: { enabled: false },
+          consolePiping: { enabled: false },
+        },
+      }),
       PloneSVGRVitePlugin(),
       PloneRegistryVitePlugin(),
       tailwindcss(),
@@ -48,6 +65,13 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
     ] as PluginOption[],
     resolve: {
       tsconfigPaths: true,
+    },
+    optimizeDeps: {
+      // fsevents is a macOS-only optional dependency pulled in transitively
+      // by react-router-devtools' vite peer dep. On Linux the package.json's
+      // os field keeps pnpm from building it, but the pre-bundled darwin
+      // binary still ships and Vite's optimizer chokes trying to parse it.
+      exclude: ['fsevents'],
     },
     server: {
       port: 3000,
