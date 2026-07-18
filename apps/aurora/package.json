@@ -48,7 +48,8 @@
     "react-dom": "catalog:",
     "react-i18next": "catalog:",
     "react-router": "catalog:",
-    "remix-i18next": "^7.1.0"
+    "remix-i18next": "^7.1.0",
+    "@plone-collective/aurora-template-studio": "workspace:*"
   },
   "devDependencies": {
     "@babel/core": "^7.28.5",
@@ -73,5 +74,8 @@
   },
   "engines": {
     "node": ">=22"
-  }
+  },
+  "addons": [
+    "@plone-collective/aurora-template-studio"
+  ]
 }
