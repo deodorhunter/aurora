@@ -11,6 +11,7 @@ import { useLoaderData } from 'react-router';
 import type { loader as editLoader } from '../../routes/edit';
 import { ObjectBrowserProvider } from './ObjectBrowserContext';
 import type { UseObjectBrowserConfig } from './ObjectBrowserContext';
+import { useObjectBrowserRoot } from './ObjectBrowserRootContext';
 import { ObjectBrowserTags } from './ObjectBrowserTags';
 import { ObjectBrowserTrigger } from './ObjectBrowserTrigger';
 import { ObjectBrowserModal } from './ObjectBrowserModal';
@@ -75,9 +76,15 @@ export function ObjectBrowserWidgetComponent(props: ObjectBrowserWidgetProps) {
 
 export function ObjectBrowserWidget(props: ObjectBrowserWidgetProps) {
   const { content } = useLoaderData<typeof editLoader>();
+  // Fall back to the ambient browse root (set by embedders like the Template
+  // Studio) when there is no edited-content @id — e.g. under /~/studio, whose
+  // loader returns a Blueprint, not page content.
+  const browseRoot = useObjectBrowserRoot();
   const { label, description, errorMessage, ...rest } = props;
   return (
-    <ObjectBrowserProvider config={{ ...rest, initialPath: content?.['@id'] }}>
+    <ObjectBrowserProvider
+      config={{ ...rest, initialPath: content?.['@id'] ?? browseRoot }}
+    >
       <ObjectBrowserWidgetComponent {...{ label, description, errorMessage }} />
     </ObjectBrowserProvider>
   );
