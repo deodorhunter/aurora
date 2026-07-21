@@ -5,12 +5,38 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
-@layer cmsui {
+/* Layer order is declared up front by the `/layers.css` route
+   (@plone/publicui/routes/layers.css.tsx), which every shell links with
+   precedence="first": theme, base, components, plone-components, utilities,
+   custom, cmsui — the list @plone/theming's install() sets and @plone/cmsui's
+   appends to. That order exists precisely so the reset can sit *below*
+   @plone/components' own component styles (letting them keep their
+   padding/border/margin) while utility classes stay above them (so an
+   explicit className="p-4" can still override a component default).
+
+   These imports all used to live in @layer cmsui — the last-declared and
+   therefore highest-priority layer — which put Tailwind's *reset* above every
+   @plone/components rule instead of below it. Cascade layers ignore selector
+   specificity entirely, so preflight's `*, ::before, ::after { border-width:
+   0; padding: 0; margin: 0 }` silently won: with @plone/components' stylesheet
+   loaded, .react-aria-Tag computed to `padding: 0` / `border: 0px` instead of
+   TagGroup.css's own `2px 8px` / `1px solid`, and the same for every other
+   component that ships CSS. Each import now sits in the layer its own name
+   already promises. */
+@layer theme {
   @import '@plone/components/src/styles/basic/theme.css';
   @import 'tailwindcss/theme.css';
-  @import 'tailwindcss/preflight.css';
-  @import 'tailwindcss/utilities.css';
+}
 
+@layer base {
+  @import 'tailwindcss/preflight.css';
+}
+
+@layer utilities {
+  @import 'tailwindcss/utilities.css';
+}
+
+@layer cmsui {
   :root {
     --background: hsl(0 0% 100%);
     --foreground: hsl(222.2 84% 4.9%);
