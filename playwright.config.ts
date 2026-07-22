@@ -18,7 +18,10 @@ export default defineConfig({
     timeout: 10_000,
   },
   use: {
-    baseURL: 'http://localhost:3000',
+    // Env override so an acceptance frontend can run on a free port instead of
+    // fighting a dev server for :3000. Defaults to the previous hardcoded value,
+    // so nothing changes unless PLAYWRIGHT_BASE_URL is set.
+    baseURL: process.env.PLAYWRIGHT_BASE_URL || 'http://localhost:3000',
     browserName: 'chromium',
     viewport: { width: 1280, height: 720 },
     trace: 'retain-on-failure',
