@@ -15,6 +15,13 @@ type RendererSchema = {
 type BaseFieldExtraProps = {
   formAtom?: PrimitiveAtom<any>;
   onChange?: (value: unknown) => void;
+  /**
+   * For widgets that resolve *derived* data alongside their own field value —
+   * the Querystring widget resolves the matching content into the Listing
+   * block's `items` — and so need to write a key `onChange` cannot express
+   * (`onChange` owns exactly one field, the one the widget is bound to).
+   */
+  onPatchFormData?: (partial: Record<string, unknown>) => void;
 };
 
 type BlockSettingsFormRendererProps = {

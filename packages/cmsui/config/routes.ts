@@ -125,6 +125,21 @@ export default function install(config: ConfigType) {
       },
     ],
   });
+  // The QuerystringWidget's results fetcher loads `/@querystringSearch?query=…`
+  // (QuerystringWidgetContext.tsx), and the loader that answers it already
+  // exists — it was just never registered, so every request fell through to the
+  // content catch-all and the widget's result list stayed permanently empty.
+  config.registerRoute({
+    type: 'prefix',
+    path: '@querystringSearch',
+    children: [
+      {
+        type: 'route',
+        path: '*',
+        file: '@plone/cmsui/routes/querystringSearch.tsx',
+      },
+    ],
+  });
   config.registerRoute({
     type: 'prefix',
     path: '@createContent',

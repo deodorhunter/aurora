@@ -12,9 +12,18 @@ import { RecurrenceWidget } from '../components/RecurrenceWidget/RecurrenceWidge
 import { ObjectBrowserWidget } from '../components/ObjectBrowserWidget/ObjectBrowserWidget';
 import ImageWidget from '../components/ImageWidget/ImageWidget';
 import { QuerystringWidget } from '../components/QuerystringWidget/QuerystringWidget';
+import { ChoicesWidget } from '../components/ChoicesWidget/ChoicesWidget';
 
 export default function install(config: ConfigType) {
   config.registerDefaultWidget(TextField);
+
+  // Fills the `choices` slot `Field.tsx`'s `getWidgetByChoices` has always
+  // looked up and never found — without it every enumerated schema field
+  // degraded to a free-text box. Assigned rather than registered: like
+  // `default`, `widgets.choices` holds a single component instead of a
+  // name→component map, so it falls outside `registerWidget`'s
+  // `MappableWidgetKeys` and has no registrar of its own.
+  config.widgets.choices = ChoicesWidget;
 
   config.registerWidget({
     key: 'id',
