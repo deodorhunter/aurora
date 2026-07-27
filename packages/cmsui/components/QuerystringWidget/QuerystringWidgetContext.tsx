@@ -203,18 +203,36 @@ export function QuerystringProvider({
 
   const searchFetcher = useFetcher<typeof querystringSearchLoader>();
 
+  // The signature covers the display parameters as well as the criteria:
+  // `limit`, `sort_on` and friends change *which* results come back, so a
+  // preview keyed on the criteria alone silently kept showing an unsorted,
+  // unbounded list while the fields above it said otherwise.
   const querySignature = useMemo(
-    () => JSON.stringify(value.query ?? []),
-    [value.query],
+    () =>
+      JSON.stringify({
+        query: value.query ?? [],
+        sort_on: value.sort_on,
+        sort_order: value.sort_order,
+        limit: value.limit,
+        b_size: value.b_size,
+      }),
+    [value.query, value.sort_on, value.sort_order, value.limit, value.b_size],
   );
   const [debouncedQuerySignature] = useDebounceValue(querySignature, 400);
 
   useEffect(() => {
-    const criteria = JSON.parse(debouncedQuerySignature) as QueryCriterion[];
-    if (!criteria || criteria.length === 0) return;
-    searchFetcher.load(
-      `/@querystringSearch?query=${encodeURIComponent(debouncedQuerySignature)}`,
-    );
+    const { query, ...params } = JSON.parse(debouncedQuerySignature) as {
+      query: QueryCriterion[];
+    } & Record<string, string | number | undefined>;
+    if (!query || query.length === 0) return;
+
+    const search = new URLSearchParams({ query: JSON.stringify(query) });
+    for (const [key, param] of Object.entries(params)) {
+      if (param !== undefined && param !== null && param !== '') {
+        search.set(key, String(param));
+      }
+    }
+    searchFetcher.load(`/@querystringSearch?${search}`);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [debouncedQuerySignature]);
 

@@ -94,6 +94,10 @@ function QueryCriterionRow({
     });
   };
 
+  // Whether this index enumerates its own values (Type, State) as opposed to
+  // being vocabulary-backed with nothing in the payload (Subject, path).
+  const hasValueOptions = Boolean(field?.valueOptions?.length);
+
   return (
     <div
       className={`
@@ -143,6 +147,33 @@ function QueryCriterionRow({
             onChange={(value: string) => handleValueChange(value)}
             isDisabled={disabled}
           />
+        ) : hasValueOptions ? (
+          /*
+           * A selection index (Type, State, …) is picked, not typed. The
+           * context has always computed `valueOptions` for these from the
+           * backend's `values` map and marked them `valueType: 'select'`;
+           * nothing ever rendered the select, so the only way to filter by
+           * content type was to type the exact `portal_type` token by hand.
+           *
+           * Gated on the options actually existing rather than on
+           * `valueType === 'select'`: `Subject` and `path` are Selection-widget
+           * indexes too, but they are vocabulary-backed and carry no `values`
+           * in the payload, so keying off the type alone would replace their
+           * working text box with an empty dropdown.
+           */
+          <Select
+            label={index === 0 ? 'Value' : undefined}
+            selectedKey={String(criterion.v ?? '') || null}
+            onSelectionChange={(key) => key != null && handleValueChange(String(key))}
+            isDisabled={disabled}
+            placeholder="Choose a value…"
+          >
+            {field!.valueOptions!.map((option) => (
+              <SelectItem key={option.value} id={option.value}>
+                {option.label}
+              </SelectItem>
+            ))}
+          </Select>
         ) : (
           <TextField
             label={index === 0 ? 'Value' : undefined}
