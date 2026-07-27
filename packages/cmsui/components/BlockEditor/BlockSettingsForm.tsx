@@ -79,6 +79,17 @@ const BlockSettingsForm = (props: BlockSettingsFormProps) => {
 
           props.onFormDataChange?.(nextData);
         },
+        // The Querystring widget resolves its criteria into matching content
+        // and hands the result back through this, to land in the Listing
+        // block's `items` (which is not the field it is bound to, so `onChange`
+        // cannot carry it). Nothing outside Storybook passed this before, so
+        // that side of the widget never ran in a real editor.
+        onPatchFormData: (partial: Record<string, unknown>) => {
+          props.onFormDataChange?.({
+            ...((form.state.values as Record<string, unknown>) ?? {}),
+            ...partial,
+          });
+        },
       })}
     />
   );

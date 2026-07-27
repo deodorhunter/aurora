@@ -145,11 +145,17 @@ const getWidgetByVocabularyFromHint = (
 
 /**
  * Get widget by field's `choices` attribute
+ *
+ * Deliberately *not* claiming `props.vocabulary` as well: this step runs before
+ * `getWidgetByVocabulary`, so a vocabulary field would never reach its own
+ * registered widget (`plone.app.vocabularies.Catalog` → `ObjectBrowserWidget`)
+ * once anything fills the `choices` slot. Nothing filled it until now, which is
+ * the only reason that ordering never bit.
  */
 const getWidgetByChoices = (
   props: FieldProps,
 ): React.ComponentType<any> | null =>
-  props.choices || props.vocabulary ? (config.widgets?.choices ?? null) : null;
+  props.choices ? (config.widgets?.choices ?? null) : null;
 
 /**
  * Get widget by field's `type` attribute
