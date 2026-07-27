@@ -28,6 +28,25 @@ function parseQuery(raw: string | null): Query[] {
   }
 }
 
+/**
+ * The display parameters that ride alongside the query. Forwarded so the
+ * editor's result preview matches what the block will actually render — a
+ * Listing capped at 5 and sorted by date must preview as 5, in that order,
+ * or the preview quietly contradicts the settings above it.
+ */
+function parseParams(searchParams: URLSearchParams) {
+  const sort_on = searchParams.get('sort_on') ?? undefined;
+  const sort_order = searchParams.get('sort_order') ?? undefined;
+  const limit = searchParams.get('limit') ?? undefined;
+  const b_size = searchParams.get('b_size') ?? undefined;
+  return {
+    ...(sort_on ? { sort_on } : {}),
+    ...(sort_order ? { sort_order } : {}),
+    ...(limit ? { limit } : {}),
+    ...(b_size ? { b_size } : {}),
+  };
+}
+
 export async function loader({
   request,
   context,
@@ -48,6 +67,7 @@ export async function loader({
   try {
     const { data: results } = await cli.querystringSearch({
       query,
+      ...parseParams(url.searchParams),
       post: true,
     });
 

@@ -73,4 +73,73 @@ describe('Querystring Search', () => {
     );
     expect(result.data.items_total).toBeGreaterThan(0);
   });
+
+  // Regression: every argument but `query` used to be destructured away and
+  // never sent, so a Listing configured as "the 5 most recent news items"
+  // searched unsorted and unbounded. The schema accepted these and the type
+  // advertised them, which is what made it silent.
+  describe('forwards the search parameters, not just the query', () => {
+    const query = [
+      {
+        i: 'portal_type',
+        o: 'plone.app.querystring.operation.selection.any',
+        v: ['Document'],
+      },
+    ];
+
+    async function seed(prefix: string) {
+      for (let i = 0; i < 3; i += 1) {
+        await cli.createContent({
+          path: '/',
+          data: { '@type': 'Document', title: `${prefix}-${uuid()}` },
+        });
+      }
+    }
+
+    test('limit caps the results (GET)', async () => {
+      await seed('limit-get');
+
+      const all = await cli.querystringSearch({ query });
+      const limited = await cli.querystringSearch({ query, limit: 2 });
+
+      expect(all.data.items.length).toBeGreaterThan(2);
+      expect(limited.data.items).toHaveLength(2);
+    });
+
+    test('limit caps the results (POST)', async () => {
+      await seed('limit-post');
+
+      const limited = await cli.querystringSearch({ query, limit: 2, post: true });
+
+      expect(limited.data.items).toHaveLength(2);
+    });
+
+    test('sort_order reverses the results', async () => {
+      await seed('sort');
+
+      const ascending = await cli.querystringSearch({
+        query,
+        sort_on: 'sortable_title',
+        sort_order: 'ascending',
+      });
+      const descending = await cli.querystringSearch({
+        query,
+        sort_on: 'sortable_title',
+        sort_order: 'descending',
+      });
+
+      const titles = (r: typeof ascending) => r.data.items.map((i) => i.title);
+      expect(titles(descending)).toEqual([...titles(ascending)].reverse());
+    });
+
+    // The Querystring widget stores these as numbers (its inputs `parseInt`),
+    // while `QuerystringParameter` types them as strings. Both arrive here.
+    test('accepts the numeric parameters as strings too', async () => {
+      await seed('numeric');
+
+      const limited = await cli.querystringSearch({ query, limit: '2' });
+
+      expect(limited.data.items).toHaveLength(2);
+    });
+  });
 });
