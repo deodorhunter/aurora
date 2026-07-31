@@ -22,7 +22,7 @@ import {
   Link,
   RouterProvider as RACRouterProvider,
 } from 'react-aria-components';
-import i18next from '@plone/aurora/app/i18next.server';
+import { getLocale } from '@plone/aurora/app/i18next.server';
 import { ploneContentContext } from '@plone/aurora/app/middleware.server';
 import type { RootLoader } from '@plone/aurora/app/root';
 import { FolderIcon } from '@plone/components/Icons';
@@ -42,7 +42,8 @@ import { withViteDevTools } from 'react-router-devtools/client';
 export const meta: MetaFunction<unknown, { root: RootLoader }> = ({
   matches,
 }) => {
-  const content = matches.find((match) => match.id === 'root')?.data?.content;
+  const content = matches.find((match) => match.id === 'root')?.loaderData
+    ?.content;
   if (!content) {
     return [];
   }
@@ -80,10 +81,9 @@ export const links: LinksFunction = () => [
 ];
 
 export async function loader({
-  request,
   context,
 }: LoaderFunctionArgs<RouterContextProvider>) {
-  const locale = await i18next.getLocale(request);
+  const locale = getLocale(context);
   const content = context.get(ploneContentContext);
   return {
     content,
