@@ -69,7 +69,15 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
       exclude: [
         'i18next-fs-backend',
         'i18next-fs-backend/cjs',
-        'remix-i18next/server',
+        // remix-i18next v8 collapsed its subpath exports ('/server',
+        // '/client', '/react') into a single root entry — the old
+        // specifiers now fail to resolve at all.
+        'remix-i18next',
+        // fsevents is a macOS-only optional dependency pulled in transitively
+        // by react-router-devtools' vite peer dep. On Linux the package.json's
+        // os field keeps pnpm from building it, but the pre-bundled darwin
+        // binary still ships and Vite's optimizer chokes trying to parse it.
+        'fsevents',
       ],
       include: [
         // App-level deps (in apps/aurora/package.json)
@@ -79,8 +87,6 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
         'react-i18next',
         // Injected by babel-plugin-react-compiler, not in any package.json
         'react/compiler-runtime',
-        'remix-i18next/client',
-        'remix-i18next/react',
         // @plone/components and @plone/helpers are not registered add-ons, so
         // their deps can't be declared in vite.extend.js — list them here
         '@plone/components > @internationalized/date',
@@ -106,18 +112,11 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
     },
     ssr: {
       optimizeDeps: {
-        include: ['i18next-fs-backend/cjs', 'isbot', 'remix-i18next/server'],
+        include: ['i18next-fs-backend/cjs', 'isbot', 'remix-i18next'],
       },
     },
     resolve: {
       tsconfigPaths: true,
-    },
-    optimizeDeps: {
-      // fsevents is a macOS-only optional dependency pulled in transitively
-      // by react-router-devtools' vite peer dep. On Linux the package.json's
-      // os field keeps pnpm from building it, but the pre-bundled darwin
-      // binary still ships and Vite's optimizer chokes trying to parse it.
-      exclude: ['fsevents'],
     },
     server: {
       port: 3000,
