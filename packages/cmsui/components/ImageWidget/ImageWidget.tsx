@@ -15,7 +15,6 @@ import {
   ObjectBrowserProvider,
   useObjectBrowserContext,
 } from '../ObjectBrowserWidget/ObjectBrowserContext';
-import { useObjectBrowserRoot } from '../ObjectBrowserWidget/ObjectBrowserRootContext';
 
 type BaseFormFieldProps = Pick<
   QuantaTextFieldProps,
@@ -213,16 +212,13 @@ function ImageInputBase({
   const [uploadError, setUploadError] = useState<string>('');
   const [linkValue, setLinkValue] = useState(imageValue);
 
-  // Browse-root precedence: explicit prop → ambient context (set by embedders
-  // like the Template Studio, whose URL isn't a content path) → current URL.
-  const browseRoot = useObjectBrowserRoot();
   const resolvedCurrentPath = useMemo(() => {
     const fallbackPath =
       typeof window !== 'undefined'
         ? getEditPathFromUrl(window.location.pathname)
         : '/';
-    return currentPath || browseRoot || fallbackPath;
-  }, [currentPath, browseRoot]);
+    return currentPath || fallbackPath;
+  }, [currentPath]);
 
   const resolvedUploadPath = useMemo(
     () => uploadPath || getBasePath(resolvedCurrentPath),
