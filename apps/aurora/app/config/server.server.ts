@@ -8,8 +8,7 @@ import applyAddonConfiguration from '../../.plone/registry.loader';
 // eslint-disable-next-line import/no-unresolved
 import applyServerAddonConfiguration from '../../.plone/registry.loader.server';
 
-import type { ContentExpander, ListingBlockFormData } from '@plone/types';
-import type { LoaderUtilityArgs } from './types';
+import type { ContentExpander } from '@plone/types';
 import installMigrations from './server/migrations.server';
 
 /**
@@ -31,24 +30,6 @@ export default function install() {
     name: 'ploneClient',
     type: 'client',
     method: () => PloneClient,
-  });
-
-  config.registerUtility({
-    name: 'ListingBlocksContentLoading',
-    type: 'rootContentSubRequest',
-    method: async (args: LoaderUtilityArgs) => {
-      const listingBlocks: { id: string; block: ListingBlockFormData }[] =
-        Object.entries(args.content.blocks ?? {})
-          .filter(([, block]) => block['@type'] === 'listing')
-          .map(([id, block]) => ({ id, block: block as ListingBlockFormData }));
-      for (let i = 0; i < listingBlocks.length; i++) {
-        const { id, block } = listingBlocks[i];
-        if (block.querystring) {
-          const results = await args.cli.querystringSearch(block.querystring);
-          args.content.blocks[id].items = results.data.items;
-        }
-      }
-    },
   });
 
   installMigrations();

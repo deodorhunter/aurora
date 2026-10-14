@@ -813,6 +813,89 @@ describe('middleware', () => {
       }
     });
 
+    it('puts fresh results into listings at every depth before any loader runs', async () => {
+      // A push changes a Locked listing's criteria but never its `items`
+      // (ATS-B79), so stored results go stale. The content every loader reads
+      // (root, the content view, `@@edit`) must carry results resolved now.
+      const listing = (id: string, portalType: string) => ({
+        type: 'ploneBlock',
+        '@type': 'listing',
+        id,
+        querystring: {
+          query: [
+            {
+              i: 'portal_type',
+              o: 'plone.app.querystring.operation.selection.any',
+              v: [portalType],
+            },
+          ],
+        },
+        items: [{ '@id': 'http://example.com/stale', title: 'Stale' }],
+        children: [{ text: '' }],
+      });
+      const getContentMock = vi.fn().mockResolvedValue({
+        data: {
+          '@id': 'http://example.com/page',
+          '@type': 'Document',
+          title: 'Page',
+          blocks: {
+            __somersault__: {
+              '@type': '__somersault__',
+              value: [
+                listing('top', 'News Item'),
+                {
+                  type: 'column_group',
+                  children: [
+                    { type: 'column', children: [listing('nested', 'Event')] },
+                  ],
+                },
+              ],
+            },
+          },
+          blocks_layout: { items: [] },
+        },
+      });
+      const querystringSearchMock = vi.fn(async ({ query }: any) => ({
+        data: {
+          items: [
+            {
+              '@id': `http://example.com/fresh-${query[0].v[0]}`,
+              title: `Fresh ${query[0].v[0]}`,
+            },
+          ],
+        },
+      }));
+      config.settings.apiPath = 'http://example.com';
+      registerPloneClientFactory({
+        getContent: getContentMock,
+        getSite: vi.fn().mockResolvedValue({ data: {} }),
+        querystringSearch: querystringSearchMock,
+      });
+      const request = new Request('http://example.com/page');
+      const context = new RouterContextProvider();
+
+      await initializePloneClientContext(request, context);
+      await fetchPloneContent(
+        {
+          request,
+          params: { '*': 'page' },
+          context,
+          pattern: '/*',
+          url: new URL(request.url),
+        },
+        vi.fn(),
+      );
+
+      const value = (context.get(ploneContentContext).blocks as any)
+        .__somersault__.value;
+      expect(value[0].items).toEqual([
+        { '@id': '/fresh-News Item', title: 'Fresh News Item' },
+      ]);
+      expect(value[1].children[0].children[0].items).toEqual([
+        { '@id': '/fresh-Event', title: 'Fresh Event' },
+      ]);
+    });
+
     it('fetches content and site and sets them in context', async () => {
       const mockContent = {
         data: { '@id': 'http://example.com/', title: 'Home' },

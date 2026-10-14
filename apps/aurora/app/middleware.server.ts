@@ -9,6 +9,7 @@ import type { Route } from './+types/root';
 import { appRoutes } from './app-routes';
 import installServer from './config/server.server';
 import { migrateContent } from './config/server/content-migrations.server';
+import { resolveListingResults } from './config/server/listing-results.server';
 
 export const ploneClientContext = createContext<PloneClient>();
 export const ploneContentContext =
@@ -277,12 +278,16 @@ export const fetchPloneContent: Route.MiddlewareFunction = async (
 
   const expand = getContentExpand(path, !!userId);
 
-  const setPloneContext = (
+  const setPloneContext = async (
     content: Awaited<ReturnType<PloneClient['getContent']>>,
     site: Awaited<ReturnType<PloneClient['getSite']>>,
     user: Awaited<ReturnType<PloneClient['getUser']>>['data'] | null,
   ) => {
     migrateContent(content.data);
+    // Here rather than in a root loader sub-request: every loader of the
+    // request (root, the content view, `@@edit`) reads this one object, in
+    // parallel, so the results must be in it before any of them runs.
+    await resolveListingResults({ cli, content: content.data });
 
     context.set(ploneContentContext, flattenToAppURL(content.data));
     context.set(ploneSiteContext, flattenToAppURL(site.data));
@@ -296,7 +301,7 @@ export const fetchPloneContent: Route.MiddlewareFunction = async (
       userId ? cli.getUser({ id: userId }).catch(() => null) : null,
     ]);
 
-    setPloneContext(content, site, user?.data ?? null);
+    await setPloneContext(content, site, user?.data ?? null);
   } catch (error: any) {
     if (error.status >= 300 && error.status < 400 && error.location) {
       return redirect(error.location, {
@@ -319,7 +324,7 @@ export const fetchPloneContent: Route.MiddlewareFunction = async (
           cli.getSite(),
         ]);
 
-        setPloneContext(content, site, null);
+        await setPloneContext(content, site, null);
         context.set(ploneClearAuthCookieContext, true);
         return;
       } catch (anonymousError: any) {
