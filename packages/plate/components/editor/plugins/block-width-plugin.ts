@@ -23,6 +23,19 @@ export type BlockWidthConfig = {
 
 export type BlockWidthPluginOptions = {
   defaultWidths?: readonly BlockWidthValue[];
+  /**
+   * Write each top-level native block's resolved width onto the node, on
+   * load, on normalization and when a block is created (the default). With
+   * `false` a native block keeps only the width it was given or that someone
+   * sets; it still renders with the resolved width, as a block without one
+   * already does via `getEffectiveBlockWidth`. For editors whose stored
+   * value must mean "what someone chose", such as a template whose keys are
+   * pushed onto pages. Mirrors `StyleFieldsPlugin`'s `storeDefaults` option
+   * (ATS-B80 / C19) for Plone blocks; this plugin only ever manages native
+   * (non-Plone) blocks, so it keeps its own copy of the option rather than
+   * sharing state with that plugin.
+   */
+  storeDefaults?: boolean;
 };
 
 const FALLBACK_WIDTH_DEFINITIONS: readonly StyleDefinition[] = [
@@ -301,9 +314,16 @@ const normalizeTopLevelBlockWidth = (
   return true;
 };
 
+const storesDefaults = (editor?: SlateEditor) =>
+  (
+    editor?.getOptions?.({ key: BLOCK_WIDTH_KEY }) as
+      BlockWidthPluginOptions | undefined
+  )?.storeDefaults !== false;
+
 export const BaseBlockWidthPlugin = createSlatePlugin({
   key: BLOCK_WIDTH_KEY,
   normalizeInitialValue: ({ editor, value }) => {
+    if (!storesDefaults(editor)) return;
     applyBlockWidthDefaultsInValue(value, editor);
   },
   inject: {
@@ -350,6 +370,7 @@ export const BaseBlockWidthPlugin = createSlatePlugin({
   },
   options: {
     defaultWidths: [],
+    storeDefaults: true,
   },
   extendEditor: ({ editor }) => {
     const createBlock = editor.api.create.block.bind(editor.api.create);
@@ -358,18 +379,24 @@ export const BaseBlockWidthPlugin = createSlatePlugin({
         ? editor.normalizeNode.bind(editor)
         : () => undefined;
 
-    editor.api.create.block = ((...args: any[]) =>
-      withCreatedBlockWidthDefaults(editor, createBlock(...args))) as any;
+    editor.api.create.block = ((...args: any[]) => {
+      const block = createBlock(...args);
+      return storesDefaults(editor)
+        ? withCreatedBlockWidthDefaults(editor, block)
+        : block;
+    }) as any;
 
     // Every top-level block ends up with a width, however it got there
     // (typed, pasted, inserted, wrapped or lifted out of a container), so the
     // saved value is exactly what `normalizeInitialValue` produces on load.
+    // Unless `storeDefaults` is off.
     editor.normalizeNode = ((entry: any) => {
       const [node, path] = entry;
 
       if (
         ElementApi.isElement(node) &&
         PathApi.isPath(path) &&
+        storesDefaults(editor) &&
         normalizeTopLevelBlockWidth(editor, node, path)
       ) {
         return;

@@ -1532,4 +1532,42 @@ describe('block width persistence', () => {
     expect(topLevelWidths(saved)).toEqual([[PLONE_BLOCK_TYPE, 'narrow']]);
     expect(reload(saved)).toEqual(saved);
   });
+
+  it('with storeDefaults off, keeps no blockWidth on a native block nobody set a width on', () => {
+    const editor = createSlateEditor({
+      plugins: [
+        ...BaseBasicBlocksKit,
+        ...BaseCalloutKit,
+        BaseStyleFieldsPlugin,
+        BaseBlockWidthPlugin.configure({
+          options: { storeDefaults: false },
+        }),
+      ],
+      value: [{ type: 'p', children: [{ text: 'Paragraph' }] }],
+    });
+
+    expect(editor.children[0]).not.toHaveProperty('blockWidth');
+
+    editor.tf.insertNodes(
+      { type: 'h2', children: [{ text: 'Heading' }] },
+      { at: [1] },
+    );
+    editor.tf.insertNodes(
+      editor.api.create.block({ type: 'p' }),
+      { at: [2] },
+    );
+
+    expect(topLevelWidths(save(editor))).toEqual([
+      ['p', undefined],
+      ['h2', undefined],
+      ['p', undefined],
+    ]);
+
+    editor.tf.blockWidth.setWidth('narrow', { at: [0] });
+    expect(topLevelWidths(save(editor))).toEqual([
+      ['p', 'narrow'],
+      ['h2', undefined],
+      ['p', undefined],
+    ]);
+  });
 });
