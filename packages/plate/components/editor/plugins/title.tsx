@@ -48,20 +48,54 @@ const isSelectionInside = (selection: any, path: number[]) => {
   );
 };
 
-const setTitleNodeText = (
+/**
+ * Rewrites the title node's text in place. Only its text children are
+ * replaced: the element itself is never removed and re-inserted, so it keeps
+ * its identity (`id`, props) and a plugin that refuses to remove that element
+ * (a locked block, for example) has nothing to refuse. Replacing the whole
+ * node went through `removeNodes` on the element, and when that was refused
+ * the insert still ran, leaving two title nodes for the normalizer to sort
+ * out.
+ */
+export const setTitleNodeText = (
   editor: TPlateEditor,
   titlePath: number[],
   titleNode: unknown,
   value: string,
 ) => {
-  editor.tf.replaceNodes(
-    {
-      ...(titleNode as object),
-      children: [{ text: value }],
-    } as any,
-    { at: titlePath },
-  );
+  const children =
+    titleNode && typeof titleNode === 'object' && 'children' in titleNode
+      ? (titleNode.children as unknown[])
+      : [];
+
+  editor.tf.withoutNormalizing(() => {
+    for (let index = children.length - 1; index >= 0; index -= 1) {
+      editor.tf.removeNodes({ at: [...titlePath, index] });
+    }
+    editor.tf.insertNodes({ text: value } as any, {
+      at: [...titlePath, 0],
+    });
+  });
 };
+
+/**
+ * The same write as the editor binding below, on a stored Plate value rather
+ * than on a live editor: the root title node's text becomes `title`. For
+ * saving a value whose editor is not mounted, such as the content form's
+ * blocks while its Content tab is shown. Returns `value` itself when there is
+ * no root title node or its text is already `title`.
+ */
+export function withTitleText<T>(value: T[], title: string): T[] {
+  const titleEntry = getTitleNodeEntry(value);
+  if (!titleEntry || getNodeText(titleEntry.node) === title) return value;
+
+  const next = [...value];
+  next[titleEntry.index] = {
+    ...(titleEntry.node as object),
+    children: [{ text: title }],
+  } as T;
+  return next;
+}
 
 function TitleMetadataSync() {
   useMetadataTextBinding({

@@ -21,6 +21,7 @@ import {
 import { WidgetContextProvider } from '../Form/WidgetContext';
 import Sidebar, { sidebarAtom } from '../Sidebar/Sidebar';
 import BlocksEditor from '../BlockEditor/BlocksEditor';
+import { syncTitleBlock } from './syncTitleBlock';
 
 interface Schema extends FieldsetsSchema {
   title: string;
@@ -62,7 +63,9 @@ export default function ContentForm({
     initialValues: content,
     validators,
     onSubmit: (values) => {
-      fetcher.submit(values as unknown as SubmitTarget, {
+      // The title block follows the `title` field even when the blocks
+      // editor, and with it Plate's title binding, is not mounted.
+      fetcher.submit(syncTitleBlock(values) as unknown as SubmitTarget, {
         method: submitMethod,
         encType: 'application/json',
       });
