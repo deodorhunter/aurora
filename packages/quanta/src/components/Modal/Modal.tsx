@@ -40,6 +40,26 @@ const modalStyles = tv({
 });
 
 export function Modal(props: ModalOverlayProps) {
+  // PATCHED (aurora-template-studio, ATS-620): the overlay-only props were
+  // being spread onto the inner RACModal too, which — since this Modal
+  // always nests RACModal inside its own ModalOverlay — made React Aria
+  // Components 1.22 log "This modal is already wrapped in a ModalOverlay,
+  // props […] should be placed on the ModalOverlay instead" on every
+  // controlled open (`isOpen`/`onOpenChange`/`isDismissable`, the exact
+  // pattern every Studio dialog uses). RACModal picks these up from the
+  // ModalOverlay's own context once it isn't handed a redundant copy.
+  const {
+    isDismissable,
+    isKeyboardDismissDisabled,
+    isOpen,
+    defaultOpen,
+    onOpenChange,
+    isEntering,
+    isExiting,
+    UNSTABLE_portalContainer,
+    shouldCloseOnInteractOutside,
+    ...modalProps
+  } = props;
   return (
     <ModalOverlay {...props} className={overlayStyles}>
       <div
@@ -48,7 +68,7 @@ export function Modal(props: ModalOverlayProps) {
           justify-center
         `}
       >
-        <RACModal {...props} className={modalStyles} />
+        <RACModal {...modalProps} className={modalStyles} />
       </div>
     </ModalOverlay>
   );
