@@ -40,6 +40,9 @@ export function ListingSchema({
         title: 'Criteria',
         description: 'Which content this listing shows.',
         widget: 'querystring',
+        // Store the resolved results in the block's `items`, which is what
+        // the Listing view renders.
+        resultsField: 'items',
       },
       headline: {
         title: 'Headline',

@@ -51,6 +51,17 @@ export default function install(config: ConfigType) {
       },
       {
         type: 'prefix',
+        path: '@@sharing',
+        children: [
+          {
+            type: 'route',
+            path: '*',
+            file: '@plone/cmsui/routes/sharing.tsx',
+          },
+        ],
+      },
+      {
+        type: 'prefix',
         path: 'controlpanel',
         children: [
           {
@@ -125,10 +136,17 @@ export default function install(config: ConfigType) {
       },
     ],
   });
-  // The QuerystringWidget's results fetcher loads `/@querystringSearch?query=…`
-  // (QuerystringWidgetContext.tsx), and the loader that answers it already
-  // exists — it was just never registered, so every request fell through to the
-  // content catch-all and the widget's result list stayed permanently empty.
+  config.registerRoute({
+    type: 'prefix',
+    path: '@vocabulary',
+    children: [
+      {
+        type: 'route',
+        path: '*',
+        file: '@plone/cmsui/routes/vocabulary.tsx',
+      },
+    ],
+  });
   config.registerRoute({
     type: 'prefix',
     path: '@querystringSearch',

@@ -1,11 +1,16 @@
-import { expect, describe, it, vi, afterEach } from 'vitest';
+import { expect, describe, it, vi, afterEach, beforeEach } from 'vitest';
 import config from '@plone/registry';
 import { RouterContextProvider } from 'react-router';
 import { jwtDecode } from 'jwt-decode';
 import { getAuthFromRequest } from '@plone/react-router';
+import PloneClient from '@plone/client';
 import {
   fetchPloneContent,
   getAPIResourceWithAuth,
+  getContentExpand,
+  getPloneClientClass,
+  getSkipContentPatterns,
+  isResourcePattern,
   installServerMiddleware,
   linkMiddleware,
   ploneClearAuthCookieContext,
@@ -15,7 +20,9 @@ import {
   ploneContentContext,
   ploneSiteContext,
   ploneUserContext,
+  routeSkipsContent,
 } from './middleware.server';
+import { defaultApiExpanders } from './config/server.server';
 
 vi.mock('jwt-decode');
 vi.mock('@plone/react-router', async (importOriginal) => {
@@ -92,6 +99,107 @@ describe('middleware', () => {
           })
           .method(),
       ).toHaveProperty('initialize');
+    });
+
+    it('applies the configuration only once per process', async () => {
+      const request = new Request('http://example.com');
+      const runMiddleware = () =>
+        installServerMiddleware(
+          {
+            request,
+            context: new RouterContextProvider(),
+            params: {},
+            pattern: '/',
+            url: new URL(request.url),
+          },
+          vi.fn(),
+        );
+      const countSlotComponents = () =>
+        Object.values(config.slots).reduce(
+          (total, slot) =>
+            total +
+            Object.values(slot.data).reduce(
+              (sum, components) => sum + components.length,
+              0,
+            ),
+          0,
+        );
+
+      await runMiddleware();
+      const routes = config.routes?.length;
+      const slotComponents = countSlotComponents();
+
+      await runMiddleware();
+      await runMiddleware();
+
+      expect(config.routes?.length).toBe(routes);
+      expect(countSlotComponents()).toBe(slotComponents);
+    });
+  });
+
+  describe('getPloneClientClass', () => {
+    afterEach(() => {
+      config.utilities.clientEndpoints = {};
+    });
+
+    it('returns the ploneClient utility when there are no clientEndpoints', () => {
+      config.registerUtility({
+        name: 'ploneClient',
+        type: 'client',
+        method: () => PloneClient,
+      });
+
+      expect(getPloneClientClass()).toBe(PloneClient);
+    });
+
+    it('adds the methods of every clientEndpoints utility', () => {
+      config.registerUtility({
+        name: 'ploneClient',
+        type: 'client',
+        method: () => PloneClient,
+      });
+      config.registerUtility({
+        name: 'first-addon',
+        type: 'clientEndpoints',
+        method: () => ({
+          getApiPath(this: PloneClient) {
+            return this.config.apiPath;
+          },
+        }),
+      });
+      config.registerUtility({
+        name: 'second-addon',
+        type: 'clientEndpoints',
+        method: () => ({ getAnswer: () => 42 }),
+      });
+
+      const cli = getPloneClientClass().initialize({
+        apiPath: 'http://localhost:8080/Plone',
+      }) as PloneClient & Record<string, () => unknown>;
+
+      expect(cli).toBeInstanceOf(PloneClient);
+      expect(cli.getApiPath()).toBe('http://localhost:8080/Plone');
+      expect(cli.getAnswer()).toBe(42);
+      expect(cli.getContent).toBeTypeOf('function');
+    });
+
+    it('extends a custom ploneClient utility', () => {
+      class CustomClient extends PloneClient {}
+      config.registerUtility({
+        name: 'ploneClient',
+        type: 'client',
+        method: () => CustomClient,
+      });
+      config.registerUtility({
+        name: 'addon',
+        type: 'clientEndpoints',
+        method: () => ({ getAnswer: () => 42 }),
+      });
+
+      const cli = getPloneClientClass().initialize({ apiPath: '' });
+
+      expect(cli).toBeInstanceOf(CustomClient);
+      expect(cli).toHaveProperty('getAnswer');
     });
   });
 
@@ -561,9 +669,148 @@ describe('middleware', () => {
     });
   });
 
+  describe('getContentExpand', () => {
+    beforeEach(() => {
+      config.settings.apiExpanders = [...defaultApiExpanders];
+    });
+
+    afterEach(() => {
+      config.settings.apiExpanders = [];
+    });
+
+    it('returns the core expansions', () => {
+      expect(getContentExpand('/', false)).toEqual([
+        'navroot',
+        'breadcrumbs',
+        'navigation',
+        'actions',
+      ]);
+      expect(getContentExpand('/', true)).toEqual([
+        'navroot',
+        'breadcrumbs',
+        'navigation',
+        'actions',
+        'types',
+      ]);
+    });
+
+    it('adds the expansions of add-ons, once each', () => {
+      config.settings.apiExpanders = [
+        ...config.settings.apiExpanders,
+        { match: '', expand: ['translations', 'navigation'] },
+        { match: '/', expand: ['translations', 'workflow'] },
+      ];
+
+      expect(getContentExpand('/news', false)).toEqual([
+        'navroot',
+        'breadcrumbs',
+        'navigation',
+        'actions',
+        'translations',
+        'workflow',
+      ]);
+    });
+
+    it('matches expanders by path prefix', () => {
+      config.settings.apiExpanders = [
+        { match: '/news', expand: ['news-extra'] },
+      ];
+
+      expect(getContentExpand('/news', false)).toContain('news-extra');
+      expect(getContentExpand('/news/item', false)).toContain('news-extra');
+      expect(getContentExpand('/newsletter', false)).not.toContain(
+        'news-extra',
+      );
+      expect(getContentExpand('/', false)).not.toContain('news-extra');
+    });
+
+    it('ignores Volto-shaped expanders', () => {
+      config.settings.apiExpanders = [
+        { match: '', GET_CONTENT: ['translations'] },
+      ];
+
+      expect(getContentExpand('/', false)).not.toContain('translations');
+    });
+
+    it('lets add-ons change the core expansions', () => {
+      config.settings.apiExpanders = [
+        { match: '', expand: ['navroot', 'breadcrumbs', 'actions'] },
+      ];
+
+      expect(getContentExpand('/', false)).toEqual([
+        'navroot',
+        'breadcrumbs',
+        'actions',
+      ]);
+    });
+
+    it('applies authenticated expanders to signed-in users only', () => {
+      config.settings.apiExpanders = [
+        { match: '', expand: ['my-profile'], authenticated: true },
+      ];
+
+      expect(getContentExpand('/', true)).toContain('my-profile');
+      expect(getContentExpand('/', false)).not.toContain('my-profile');
+    });
+  });
+
   describe('fetchPloneContent', () => {
+    beforeEach(() => {
+      config.settings.apiExpanders = [...defaultApiExpanders];
+    });
+
     afterEach(() => {
       delete config.utilities['ploneClient'];
+      config.settings.apiExpanders = [];
+    });
+
+    it('skips fetching for resource routes', async () => {
+      const routes = config.routes;
+      config.routes = [
+        {
+          type: 'prefix',
+          path: '@objectBrowserWidget',
+          children: [{ type: 'route', path: '*', file: 'browser.tsx' }],
+        },
+      ];
+      const getContentMock = vi.fn();
+      const getSiteMock = vi.fn();
+      const getUserMock = vi.fn();
+      config.settings.apiPath = 'http://example.com';
+      registerPloneClientFactory({
+        getContent: getContentMock,
+        getSite: getSiteMock,
+        getUser: getUserMock,
+      });
+      vi.mocked(getAuthFromRequest).mockResolvedValue('valid.jwt.token');
+      vi.mocked(jwtDecode).mockReturnValue({ sub: 'admin' });
+      const request = new Request(
+        'http://example.com/@objectBrowserWidget/missing',
+      );
+      const context = new RouterContextProvider();
+
+      await initializePloneClientContext(request, context);
+
+      try {
+        const result = await fetchPloneContent(
+          {
+            request,
+            params: { '*': 'missing' },
+            context,
+            pattern: '@objectBrowserWidget/*',
+            url: new URL(request.url),
+          },
+          vi.fn(),
+        );
+
+        expect(result).toBeUndefined();
+        expect(getContentMock).not.toHaveBeenCalled();
+        expect(getSiteMock).not.toHaveBeenCalled();
+        expect(getUserMock).not.toHaveBeenCalled();
+        expect(() => context.get(ploneContentContext)).toThrow();
+      } finally {
+        config.routes = routes;
+      }
     });
 
     it('fetches content and site and sets them in context', async () => {
@@ -891,6 +1138,10 @@ describe('middleware', () => {
     });
 
     it('retries anonymously after a 401 and clears the auth cookie context', async () => {
+      config.settings.apiExpanders = [
+        ...config.settings.apiExpanders,
+        { match: '', expand: ['my-profile'], authenticated: true },
+      ];
       const authContent = vi
         .fn()
         .mockRejectedValueOnce({ data: undefined, status: 401 });
@@ -946,6 +1197,17 @@ describe('middleware', () => {
         nextMock,
       );
 
+      expect(authContent).toHaveBeenCalledWith({
+        path: '/',
+        expand: [
+          'navroot',
+          'breadcrumbs',
+          'navigation',
+          'actions',
+          'types',
+          'my-profile',
+        ],
+      });
       expect(anonymousContent).toHaveBeenCalledWith({
         path: '/',
         expand: ['navroot', 'breadcrumbs', 'navigation', 'actions'],
@@ -1083,6 +1345,126 @@ describe('middleware', () => {
       const result = await linkMiddleware(makeArgs(context), vi.fn());
 
       expect(result).toBeUndefined();
+    });
+
+    it('does nothing for routes that set skipContent, without content', async () => {
+      const context = new RouterContextProvider();
+
+      const result = await linkMiddleware(
+        { ...makeArgs(context), pattern: 'reset-fetcher' },
+        vi.fn(),
+      );
+
+      expect(result).toBeUndefined();
+    });
+  });
+
+  describe('getSkipContentPatterns', () => {
+    it('returns the value of the flagged routes and their descendants', () => {
+      const patterns = getSkipContentPatterns([
+        { type: 'route', path: 'ok', file: 'ok.tsx', skipContent: true },
+        {
+          type: 'prefix',
+          path: '@search',
+          skipContent: true,
+          children: [{ type: 'route', path: '*', file: 'search.tsx' }],
+        },
+        {
+          type: 'layout',
+          file: 'layout.tsx',
+          children: [
+            {
+              type: 'prefix',
+              path: '@@contents',
+              children: [
+                {
+                  type: 'route',
+                  path: '@@delete/*',
+                  file: 'delete.tsx',
+                  skipContent: true,
+                },
+                { type: 'route', path: '*', file: 'contents.tsx' },
+              ],
+            },
+          ],
+        },
+        {
+          type: 'prefix',
+          path: 'api',
+          skipContent: true,
+          children: [
+            { type: 'index', file: 'api.tsx' },
+            {
+              type: 'route',
+              path: 'content/*',
+              file: 'content.tsx',
+              skipContent: false,
+            },
+          ],
+        },
+        { type: 'route', path: '*', file: 'content.tsx' },
+      ]);
+
+      expect(Object.fromEntries(patterns)).toEqual({
+        '@@contents/@@delete/*': true,
+        '@search/*': true,
+        api: true,
+        'api/content/*': false,
+        ok: true,
+      });
+    });
+  });
+
+  describe('isResourcePattern', () => {
+    it('matches a segment that starts with a single @', () => {
+      expect(isResourcePattern('@search/*')).toBe(true);
+      expect(isResourcePattern('@@contents/@delete/*')).toBe(true);
+      expect(isResourcePattern('@@edit/*')).toBe(false);
+      expect(isResourcePattern('@@contents/*')).toBe(false);
+      expect(isResourcePattern('*')).toBe(false);
+      expect(isResourcePattern('layers.css')).toBe(false);
+    });
+  });
+
+  describe('routeSkipsContent', () => {
+    it('skips resource routes and the routes that set skipContent', () => {
+      const routes = config.routes;
+      config.routes = [
+        {
+          type: 'prefix',
+          path: '@objectBrowserWidget',
+          children: [{ type: 'route', path: '*', file: 'browser.tsx' }],
+        },
+        {
+          type: 'prefix',
+          path: '@needs-content',
+          skipContent: false,
+          children: [{ type: 'route', path: '*', file: 'needs.tsx' }],
+        },
+        {
+          type: 'route',
+          path: 'layers.css',
+          file: 'layers.tsx',
+          skipContent: true,
+        },
+      ];
+
+      try {
+        // By convention.
+        expect(routeSkipsContent('@objectBrowserWidget/*')).toBe(true);
+        expect(routeSkipsContent('/@objectBrowserWidget/*')).toBe(true);
+        expect(routeSkipsContent('@@contents/@delete/*')).toBe(true);
+        expect(routeSkipsContent('@@edit/*')).toBe(false);
+        expect(routeSkipsContent('*')).toBe(false);
+        expect(routeSkipsContent('/')).toBe(false);
+        // Overridden by the route entries, including the app's own.
+        expect(routeSkipsContent('@needs-content/*')).toBe(false);
+        expect(routeSkipsContent('layers.css')).toBe(true);
+        expect(routeSkipsContent('reset-fetcher')).toBe(true);
+        expect(routeSkipsContent('ok')).toBe(true);
+      } finally {
+        config.routes = routes;
+      }
     });
   });
 });

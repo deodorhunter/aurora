@@ -1,13 +1,15 @@
 import { useId, useCallback, useMemo, useEffect, useRef } from 'react';
 import { tv } from 'tailwind-variants';
-import type { TextFieldProps as QuantaTextFieldProps } from '@plone/components/quanta';
+import type { TextFieldProps as QuantaTextFieldProps } from '@plone/quanta';
 import {
   Description,
   fieldBorderStyles,
   FieldError,
   Label,
 } from '../Field/Field';
+
 import { focusRing } from '../utils';
+import { useOptionalFormContext } from '@plone/helpers';
 import { Switch } from '@plone/components';
 import {
   TextField,
@@ -16,7 +18,7 @@ import {
   ComboBox,
   ComboBoxItem,
   Button,
-} from '@plone/components/quanta';
+} from '@plone/quanta';
 import {
   QuerystringProvider,
   useQuerystringContext,
@@ -24,7 +26,7 @@ import {
   type QueryCriterion,
   type FieldMetadata,
 } from './QuerystringWidgetContext';
-import { BinIcon, AddIcon } from '@plone/components/Icons';
+import { BinIcon, AddIcon } from '@plone/icons';
 
 type BaseFormFieldProps = Pick<
   QuantaTextFieldProps,
@@ -46,6 +48,11 @@ interface QuerystringWidgetProps extends BaseFormFieldProps {
   defaultValue?: QuerystringValue;
   onChange?: (value: QuerystringValue) => void;
   onPatchFormData?: (partial: Record<string, unknown>) => void;
+  /**
+   * Widget option: the sibling field the search results are stored in, for
+   * example a Listing block's `items`. Needs the widget to be inside a form.
+   */
+  resultsField?: string;
 }
 
 /**
@@ -220,8 +227,23 @@ function QuerystringWidgetComponent(props: QuerystringWidgetProps) {
 
   // Feed query-string search results into the block's `items` so the
   // Listing block preview renders them, mirroring Volto's withQuerystringResults.
+  //
+  // The results are not the field this widget is bound to, so `onChange`
+  // cannot carry them. With the `resultsField` widget option, they are written
+  // into that sibling field of the form the widget is rendered in -- the same
+  // way the image widget's `extraFields` stores a picked image's details. The
+  // schema forms render widgets through `SchemaField`, which forwards no
+  // `onPatchFormData`, so without the option nothing in a real editor ever
+  // received the results.
+  const form = useOptionalFormContext();
+  const { resultsField } = props;
   const patchRef = useRef(props.onPatchFormData);
-  patchRef.current = props.onPatchFormData;
+  patchRef.current =
+    props.onPatchFormData ??
+    (form && resultsField
+      ? (partial: Record<string, unknown>) =>
+          form.setFieldValue(resultsField as never, partial.items as never)
+      : undefined);
   const lastItemsRef = useRef<string>('[]');
 
   useEffect(() => {

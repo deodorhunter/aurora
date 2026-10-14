@@ -4,7 +4,9 @@ import { flattenToAppURL } from '@plone/helpers';
 import { clearAuthOnResponse, getAuthFromRequest } from '@plone/react-router';
 import config from '@plone/registry';
 import type PloneClient from '@plone/client';
+import type { ReactRouterRouteEntry } from '@plone/types';
 import type { Route } from './+types/root';
+import { appRoutes } from './app-routes';
 import installServer from './config/server.server';
 import { migrateContent } from './config/server/content-migrations.server';
 
@@ -33,11 +35,104 @@ function getAuthorizedResourceHeaders(
   return headers;
 }
 
+/**
+ * Returns the `PloneClient` class registered as the `ploneClient` utility,
+ * extended with the methods of every registered `clientEndpoints` utility.
+ */
+export function getPloneClientClass() {
+  const PloneClient = config
+    .getUtility({
+      name: 'ploneClient',
+      type: 'client',
+    })
+    .method();
+
+  const endpoints = config
+    .getUtilities({ type: 'clientEndpoints' })
+    .map((utility) => utility.method());
+
+  return endpoints.length > 0
+    ? PloneClient.extend(Object.assign({}, ...endpoints))
+    : PloneClient;
+}
+
+function normalizePattern(pattern: string) {
+  return pattern.split('/').filter(Boolean).join('/');
+}
+
+/**
+ * Returns the `skipContent` value of the routes that set it, or inherit it,
+ * keyed by their pattern as React Router passes it to middleware (`pattern`).
+ */
+export function getSkipContentPatterns(
+  routes: ReactRouterRouteEntry[],
+  parentPath = '',
+  parentSkipContent: boolean | undefined = undefined,
+  patterns = new Map<string, boolean>(),
+): Map<string, boolean> {
+  for (const route of routes) {
+    const skipContent = route.skipContent ?? parentSkipContent;
+    const path =
+      route.type === 'route' || route.type === 'prefix'
+        ? `${parentPath}/${route.path}`
+        : parentPath;
+
+    if (
+      skipContent !== undefined &&
+      (route.type === 'route' || route.type === 'index')
+    ) {
+      patterns.set(normalizePattern(path), skipContent);
+    }
+    if ('children' in route && route.children) {
+      getSkipContentPatterns(route.children, path, skipContent, patterns);
+    }
+  }
+  return patterns;
+}
+
+/**
+ * Whether a route pattern names a resource: one of its segments starts with
+ * a single `@`, like `@search/*` or `@@contents/@delete/*`. Views use `@@`.
+ */
+export function isResourcePattern(pattern: string) {
+  return pattern.split('/').some((segment) => /^@(?!@)/.test(segment));
+}
+
+// Routes are fixed once the add-ons are installed, so compute the patterns
+// once per `config.routes` array.
+const skipContentPatternsCache = new WeakMap<
+  ReactRouterRouteEntry[],
+  Map<string, boolean>
+>();
+
+/**
+ * Whether the route matched by a request doesn't need the Plone content,
+ * site and user. Resource routes (see `isResourcePattern`) don't, other
+ * routes do. A route entry overrides it with `skipContent`.
+ */
+export function routeSkipsContent(pattern: string) {
+  const routes = config.routes ?? [];
+  let patterns = skipContentPatternsCache.get(routes);
+  if (!patterns) {
+    patterns = getSkipContentPatterns([...appRoutes, ...routes]);
+    skipContentPatternsCache.set(routes, patterns);
+  }
+  const normalized = normalizePattern(pattern);
+  return patterns.get(normalized) ?? isResourcePattern(normalized);
+}
+
+// Module-level, so the configuration is applied once per process. During
+// development, editing the configuration re-evaluates this module through
+// HMR, which resets the flag and applies the new configuration.
+let serverConfigInstalled = false;
+
 export const installServerMiddleware: Route.MiddlewareFunction = async (
   { request, context },
   next,
 ) => {
+  if (serverConfigInstalled) return;
   installServer();
+  serverConfigInstalled = true;
 };
 
 export const PloneClientMiddleware: Route.MiddlewareFunction = async (
@@ -46,12 +141,7 @@ export const PloneClientMiddleware: Route.MiddlewareFunction = async (
 ) => {
   const token = await getAuthFromRequest(request);
 
-  const PloneClient = config
-    .getUtility({
-      name: 'ploneClient',
-      type: 'client',
-    })
-    .method();
+  const PloneClient = getPloneClientClass();
 
   const cli = PloneClient.initialize({
     apiPath: config.settings.apiPath,
@@ -133,11 +223,40 @@ export const getAPIResourceWithAuth: Route.MiddlewareFunction = async (
   }
 };
 
+function matchesExpanderPath(path: string, match: string) {
+  const prefix = match.replace(/\/+$/, '');
+  return prefix === '' || path === prefix || path.startsWith(`${prefix}/`);
+}
+
+/**
+ * Returns the components to expand in the content request of `path`, as
+ * declared in `config.settings.apiExpanders` (see `defaultApiExpanders` in
+ * `config/server.server.ts` for the core ones). Expanders flagged
+ * `authenticated` apply only to signed-in users, so that anonymous requests,
+ * and their cache keys, stay unchanged.
+ */
+export function getContentExpand(path: string, authenticated: boolean) {
+  const expand: string[] = [];
+
+  for (const expander of config.settings.apiExpanders ?? []) {
+    // Volto-shaped expanders (`GET_CONTENT`) do not apply to Plone Aurora.
+    if (!('expand' in expander)) continue;
+    if (expander.authenticated && !authenticated) continue;
+    if (!matchesExpanderPath(path, expander.match)) continue;
+    for (const name of expander.expand) {
+      if (!expand.includes(name)) expand.push(name);
+    }
+  }
+
+  return expand;
+}
+
 export const fetchPloneContent: Route.MiddlewareFunction = async (
-  { request, params, context },
+  { request, params, context, pattern },
   next,
 ) => {
-  const expand = ['navroot', 'breadcrumbs', 'navigation', 'actions'];
+  if (routeSkipsContent(pattern)) return;
+
   const token = await getAuthFromRequest(request);
 
   let cli = context.get(ploneClientContext);
@@ -156,7 +275,7 @@ export const fetchPloneContent: Route.MiddlewareFunction = async (
     } catch {}
   }
 
-  if (userId) expand.push('types');
+  const expand = getContentExpand(path, !!userId);
 
   const setPloneContext = (
     content: Awaited<ReturnType<PloneClient['getContent']>>,
@@ -185,12 +304,7 @@ export const fetchPloneContent: Route.MiddlewareFunction = async (
       });
     }
     if (token && error?.status === 401) {
-      const PloneClient = config
-        .getUtility({
-          name: 'ploneClient',
-          type: 'client',
-        })
-        .method();
+      const PloneClient = getPloneClientClass();
       cli = PloneClient.initialize({
         apiPath: config.settings.apiPath,
       });
@@ -200,7 +314,7 @@ export const fetchPloneContent: Route.MiddlewareFunction = async (
         const [content, site] = await Promise.all([
           cli.getContent({
             path,
-            expand: expand.filter((item) => item !== 'types'),
+            expand: getContentExpand(path, false),
           }),
           cli.getSite(),
         ]);
@@ -225,9 +339,11 @@ export const fetchPloneContent: Route.MiddlewareFunction = async (
 };
 
 export const linkMiddleware: Route.MiddlewareFunction = async (
-  { context },
+  { context, pattern },
   next,
 ) => {
+  if (routeSkipsContent(pattern)) return;
+
   const content = context.get(ploneContentContext);
 
   if (

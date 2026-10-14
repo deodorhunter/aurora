@@ -2,8 +2,8 @@ import { reactRouter } from '@react-router/dev/vite';
 import path from 'node:path';
 import { defineConfig, PluginOption } from 'vite';
 import { PloneRegistryVitePlugin } from '@plone/registry/vite-plugin';
-import { PloneSVGRVitePlugin } from '@plone/components/vite-plugin-svgr';
-import applyAddonViteConfiguration from './.plone/vite.loader';
+import { PloneSVGRVitePlugin } from '@plone/icons/vite-plugin-svgr';
+import applyAddonViteConfiguration from './.plone/vite.loader.js';
 import babel from 'vite-plugin-babel';
 import tailwindcss from '@tailwindcss/vite';
 import { visualizer } from 'rollup-plugin-visualizer';
@@ -13,7 +13,7 @@ import { reactRouterDevTools } from 'react-router-devtools';
 export default defineConfig(({ command, mode, isSsrBuild }) => {
   const analyze = process.env.ANALYZE === 'true';
   const target = isSsrBuild ? 'server' : 'client';
-  const statsDir = path.resolve(__dirname, 'build', 'stats');
+  const statsDir = path.resolve(import.meta.dirname, 'build', 'stats');
 
   const baseConfig = {
     plugins: [
@@ -69,9 +69,6 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
       exclude: [
         'i18next-fs-backend',
         'i18next-fs-backend/cjs',
-        // remix-i18next v8 collapsed its subpath exports ('/server',
-        // '/client', '/react') into a single root entry — the old
-        // specifiers now fail to resolve at all.
         'remix-i18next',
         // fsevents is a macOS-only optional dependency pulled in transitively
         // by react-router-devtools' vite peer dep. On Linux the package.json's
@@ -87,26 +84,35 @@ export default defineConfig(({ command, mode, isSsrBuild }) => {
         'react-i18next',
         // Injected by babel-plugin-react-compiler, not in any package.json
         'react/compiler-runtime',
-        // @plone/components and @plone/helpers are not registered add-ons, so
-        // their deps can't be declared in vite.extend.js — list them here
-        '@plone/components > @internationalized/date',
-        '@plone/components > @react-aria/utils',
-        '@plone/components > @react-spectrum/utils',
+        // @plone/components, @plone/icons, @plone/quanta and @plone/helpers are
+        // not registered add-ons, so their deps can't be declared in
+        // vite.extend.js — list them here
         '@plone/components > clsx',
         '@plone/components > react-aria',
         '@plone/components > react-aria-components',
         '@plone/components > react-aria-components/DropZone',
-        '@plone/components > react-aria-components/Form',
-        '@plone/components > react-aria-components/Group',
-        '@plone/components > react-aria-components/Modal',
-        '@plone/components > react-aria-components/Table',
-        '@plone/components > react-aria-components/Tooltip',
-        '@plone/components > react-aria-components/composeRenderProps',
-        '@plone/components > react-stately',
-        '@plone/components > tailwind-merge',
-        '@plone/components > tailwind-variants',
+        '@plone/icons > @react-aria/utils',
+        '@plone/icons > @react-spectrum/utils',
+        '@plone/icons > clsx',
+        '@plone/icons > tailwind-variants',
+        '@plone/quanta > @internationalized/date',
+        '@plone/quanta > @react-aria/utils',
+        '@plone/quanta > clsx',
+        '@plone/quanta > react-aria',
+        '@plone/quanta > react-aria-components',
+        '@plone/quanta > react-aria-components/DropZone',
+        '@plone/quanta > react-aria-components/Form',
+        '@plone/quanta > react-aria-components/Group',
+        '@plone/quanta > react-aria-components/Modal',
+        '@plone/quanta > react-aria-components/Table',
+        '@plone/quanta > react-aria-components/Tooltip',
+        '@plone/quanta > react-aria-components/composeRenderProps',
+        '@plone/quanta > react-stately',
+        '@plone/quanta > tailwind-merge',
+        '@plone/quanta > tailwind-variants',
         '@plone/helpers > jotai',
         '@plone/helpers > jotai/utils',
+        '@plone/helpers > jotai/vanilla',
         '@plone/helpers > jotai-optics',
       ],
     },

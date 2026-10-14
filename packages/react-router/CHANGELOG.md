@@ -8,6 +8,18 @@
 
 <!-- towncrier release notes start -->
 
+## 2.0.0-alpha.7 (2026-10-03)
+
+### Internal
+
+- The `release` scripts now take the GitHub token from `gh auth token` when `GITHUB_TOKEN` is not set, and run `towncrier` with `uvx` instead of `pipx`. @sneridagh 
+
+## 2.0.0-alpha.6 (2026-09-21)
+
+### Internal
+
+- Updated package repository metadata and towncrier issue links from `plone/volto` to `plone/aurora`. @sneridagh 
+
 ## 2.0.0-alpha.5 (2026-07-02)
 
 ### Internal

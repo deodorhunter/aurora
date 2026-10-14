@@ -20,9 +20,9 @@ import { ExitBreakKit } from './plugins/exit-break-kit';
 import { FloatingToolbarKit } from './plugins/floating-toolbar-kit';
 import { FontKit } from './plugins/font-kit';
 import { LineHeightKit } from './plugins/line-height-kit';
+import { LegacyPastePlugin } from './plugins/legacy-paste-plugin';
 import { ListKit } from './plugins/list-kit';
 import { MarkdownKit } from './plugins/markdown-kit';
-import { MediaKit } from './plugins/media-kit';
 import { MentionKit } from './plugins/mention-kit';
 import { BlockWidthKit } from './plugins/block-width-kit';
 import { BlockAnatomyKit } from './plugins/block-anatomy-kit';
@@ -32,9 +32,10 @@ import { SuggestionKit } from './plugins/suggestion-kit';
 import { TableKit } from './plugins/table-kit';
 import { TocKit } from './plugins/toc-kit';
 import { ToggleKit } from './plugins/toggle-kit';
-import { SplitHotkeyPlugin } from './plugins/split-hotkey';
 
 export const BlockEditorKit = [
+  // Normalizes legacy Slate fragments pasted from a legacy volto-slate editor.
+  LegacyPastePlugin,
   // ...AIKit,
   ...BlockMenuKit,
 
@@ -44,7 +45,6 @@ export const BlockEditorKit = [
   ...TableKit,
   ...ToggleKit,
   ...TocKit,
-  ...MediaKit,
   ...CalloutKit,
   ...ColumnKit,
   ...MentionKit,
@@ -71,7 +71,6 @@ export const BlockEditorKit = [
   ...CursorOverlayKit,
   // ...DndKit,
   ...ExitBreakKit,
-  SplitHotkeyPlugin,
   TrailingBlockPlugin,
 
   // Parsers
