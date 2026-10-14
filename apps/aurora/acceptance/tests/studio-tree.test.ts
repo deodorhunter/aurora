@@ -114,9 +114,15 @@ test.describe('Studio Template Tree', () => {
     const tree = page.getByRole('treegrid', { name: 'Blueprint tree' });
     await expect(tree.getByRole('row', { name: /Page blueprints/ })).toBeVisible();
     await expect(tree.getByRole('row', { name: /Block templates/ })).toBeVisible();
-    // Group folder nested under its kind root, and the blueprint under that.
-    await expect(tree.getByRole('row', { name: /Marketing/ })).toBeVisible();
+    // Group folder nested under its kind root. `initialExpandedKeys`
+    // (buildTree.ts) opens only the two kind roots on arrival — "a folder
+    // stays a thing you open" — so Marketing starts collapsed and its child
+    // isn't in the tree yet.
+    const marketingGroup = tree.getByRole('row', { name: /Marketing/ });
+    await expect(marketingGroup).toBeVisible();
+    await marketingGroup.getByRole('button', { name: 'Expand' }).click();
     await expect(tree.getByRole('row', { name: /Landing page/ })).toBeVisible();
+    // Ungrouped, under its own kind root — already open.
     await expect(tree.getByRole('row', { name: /Teaser template/ })).toBeVisible();
 
     // Tag facet chips come from facets.tags with counts (no client-side scan).
