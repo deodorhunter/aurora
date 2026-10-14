@@ -22,14 +22,38 @@ type SelectedNativeBlock = {
 const isPloneBlockElement = (node: unknown) =>
   ElementApi.isElement(node) && node.type === PLONE_BLOCK_TYPE;
 
+/**
+ * The nearest Plone block at or above `path`.
+ *
+ * A Plone block is not always a top-level node: layout elements such as a
+ * column group nest it (`column_group > column > ploneBlock`). Taking the
+ * outermost block there lands on the group, which is not a Plone block, and
+ * the sidebar shows no form for the block the user actually selected.
+ */
+const findPloneBlockAt = (
+  editor: any,
+  path: number[] | undefined,
+): [any, number[]] | null => {
+  if (!Array.isArray(path)) return null;
+  for (let depth = path.length; depth > 0; depth -= 1) {
+    const entry = editor.api.node(path.slice(0, depth));
+    if (entry && isPloneBlockElement(entry[0])) return entry;
+  }
+  return null;
+};
+
+const getBlockSelectionEntries = (
+  editor: any,
+  options: { selectionFallback?: boolean } = {},
+): [any, number[]][] =>
+  editor
+    .getApi(BlockSelectionPlugin)
+    ?.blockSelection?.getNodes?.({ ...options, sort: true }) ?? [];
+
 const getPloneBlockFromBlockSelection = (
   editor: any,
 ): [any, number[]] | null => {
-  const entries =
-    editor
-      .getApi(BlockSelectionPlugin)
-      ?.blockSelection?.getNodes?.({ selectionFallback: true, sort: true }) ??
-    [];
+  const entries = getBlockSelectionEntries(editor, { selectionFallback: true });
 
   for (let index = entries.length - 1; index >= 0; index -= 1) {
     const [node, path] = entries[index];
@@ -50,36 +74,39 @@ const getPloneBlockFromActiveElement = (
 
   try {
     const node = editor.api.toSlateNode(blockElement);
-    if (!isPloneBlockElement(node)) return null;
-    const path = editor.api.findPath(node);
-    return path ? [node, path] : null;
+    if (!node) return null;
+    return findPloneBlockAt(editor, editor.api.findPath(node));
   } catch {
     return null;
   }
 };
 
-const getPloneBlockFromSelection = (editor: any): [any, number[]] | null => {
-  const path = editor.selection?.anchor?.path;
-  const rootIndex = Array.isArray(path) ? path[0] : undefined;
-  if (typeof rootIndex !== 'number') return null;
+const getPloneBlockFromSelection = (editor: any): [any, number[]] | null =>
+  findPloneBlockAt(editor, editor.selection?.anchor?.path);
 
-  const entry = editor.api.node([rootIndex]);
-  if (!entry) return null;
-
-  const [node, nodePath] = entry;
-  return isPloneBlockElement(node) ? [node, nodePath] : null;
-};
+/**
+ * Whether the user block-selected a container of `path` (a column group, say)
+ * rather than the Plone block inside it. Selecting the container itself shows
+ * no form, as before nested blocks were resolved: the caret may still sit in
+ * one of its children, and that child is not what was selected.
+ */
+const isInsideBlockSelectedContainer = (editor: any, path: number[]) =>
+  getBlockSelectionEntries(editor).some(
+    ([, selectedPath]) =>
+      selectedPath.length < path.length &&
+      selectedPath.every((index, depth) => path[depth] === index),
+  );
 
 const getSelectedNativeBlock = (editor: any): SelectedNativeBlock | null => {
   const entry =
     getPloneBlockFromBlockSelection(editor) ??
     getPloneBlockFromActiveElement(editor) ??
-    getPloneBlockFromSelection(editor) ??
-    editor.api.block({ highest: true });
+    getPloneBlockFromSelection(editor);
   if (!entry) return null;
 
   const [node, path] = entry;
   if (!isPloneBlockElement(node)) return null;
+  if (isInsideBlockSelectedContainer(editor, path)) return null;
 
   const blockType = node['@type'];
   if (typeof blockType !== 'string') return null;
