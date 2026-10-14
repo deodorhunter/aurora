@@ -1489,6 +1489,37 @@ describe('block width persistence', () => {
     expect(reload(saved)).toEqual(saved);
   });
 
+  it('with storeDefaults off, keeps only the style fields a Plone block was given or set', () => {
+    const editor = createSlateEditor({
+      plugins: [
+        ...BaseBasicBlocksKit,
+        BaseStyleFieldsPlugin.configure({ options: { storeDefaults: false } }),
+        BaseBlockWidthPlugin,
+      ],
+      value: [
+        { type: PLONE_BLOCK_TYPE, '@type': 'teaser', children: [{ text: '' }] },
+      ],
+    });
+
+    expect(editor.children[0]).not.toHaveProperty('blockWidth');
+
+    editor.tf.setNodes({ href: '/target' } as never, { at: [0] });
+    editor.tf.insertNodes(
+      editor.api.create.block({ type: PLONE_BLOCK_TYPE, '@type': 'teaser' }),
+      { at: [1] },
+    );
+    expect(topLevelWidths(save(editor))).toEqual([
+      [PLONE_BLOCK_TYPE, undefined],
+      [PLONE_BLOCK_TYPE, undefined],
+    ]);
+
+    setStyleFieldOnEditor(editor, 'blockWidth', 'layout', { at: [0] });
+    expect(topLevelWidths(save(editor))).toEqual([
+      [PLONE_BLOCK_TYPE, 'layout'],
+      [PLONE_BLOCK_TYPE, undefined],
+    ]);
+  });
+
   it('stores a non-default Plone block width and keeps it on reload', () => {
     const editor = createEditor([
       { type: PLONE_BLOCK_TYPE, '@type': 'teaser', children: [{ text: '' }] },

@@ -20,6 +20,18 @@ import {
 import { toPlatePlugin } from 'platejs/react';
 
 export const STYLE_FIELDS_KEY = 'styleFields';
+
+export type StyleFieldsPluginOptions = {
+  /**
+   * Write each top-level Plone block's style field defaults onto the node, on
+   * load, on normalization and when a block is created (the default). With
+   * `false` a block keeps only the style fields it was given or that someone
+   * sets; it still renders with the defaults, as a block without them always
+   * does. For editors whose stored value must mean "what someone chose", such
+   * as a template whose keys are pushed onto pages.
+   */
+  storeDefaults?: boolean;
+};
 const DEFAULT_BLOCK_WIDTH = 'default';
 type StyleFieldConfig = {
   defaultValue?: string;
@@ -260,9 +272,17 @@ export const resetStyleFieldOnEditor = (
   setStyleFieldOnEditor(editor, fieldName, defaultValue, options);
 };
 
+const storesDefaults = (editor?: SlateEditor) =>
+  (
+    editor?.getOptions?.({ key: STYLE_FIELDS_KEY }) as
+      StyleFieldsPluginOptions | undefined
+  )?.storeDefaults !== false;
+
 export const BaseStyleFieldsPlugin = createSlatePlugin({
   key: STYLE_FIELDS_KEY,
-  normalizeInitialValue: ({ value }) => {
+  options: { storeDefaults: true } as StyleFieldsPluginOptions,
+  normalizeInitialValue: ({ editor, value }) => {
+    if (!storesDefaults(editor)) return;
     applyStyleFieldDefaultsInValue(value);
   },
   inject: {
@@ -304,18 +324,23 @@ export const BaseStyleFieldsPlugin = createSlatePlugin({
         ? editor.normalizeNode.bind(editor)
         : () => undefined;
 
-    editor.api.create.block = ((...args: any[]) =>
-      withInsertedStyleFieldDefaults(createBlock(...args))) as any;
+    editor.api.create.block = ((...args: any[]) => {
+      const block = createBlock(...args);
+      return storesDefaults(editor)
+        ? withInsertedStyleFieldDefaults(block)
+        : block;
+    }) as any;
 
     // Top-level Plone blocks always carry their style field defaults, however
     // they got there, so the saved value is exactly what
-    // `normalizeInitialValue` produces on load.
+    // `normalizeInitialValue` produces on load. Unless `storeDefaults` is off.
     editor.normalizeNode = ((entry: any) => {
       const [node, path] = entry;
 
       if (
         ElementApi.isElement(node) &&
         PathApi.isPath(path) &&
+        storesDefaults(editor) &&
         normalizeTopLevelStyleFields(editor, node, path)
       ) {
         return;
