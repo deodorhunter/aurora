@@ -120,20 +120,27 @@ test.describe('Studio Template Tree', () => {
     await expect(tree.getByRole('row', { name: /Teaser template/ })).toBeVisible();
 
     // Tag facet chips come from facets.tags with counts (no client-side scan).
-    // They live in the search header (TagGroupFilter), a SIBLING of the tree,
-    // and `Tag`/`TagGroup` (@plone/components -> react-aria-components) is
-    // built on useGridListItem — so a chip is a `row` inside a `grid` named
-    // "Tags". RAC has no "tag" role at all, which is why the original
-    // `getByRole('tag')` could never have matched, even before ATS-610.
-    // Scoping to the Tags grid matters: the tree is full of `row`s too.
-    const tags = page.getByRole('grid', { name: 'Tags' });
-    await expect(tags.getByRole('row', { name: /^test/ })).toBeVisible();
-    await expect(tags.getByRole('row', { name: /campaign-2026/ })).toBeVisible();
+    // They live in the search header (`TagGroupFilter.tsx`), a SIBLING of the
+    // tree. ATS-B45/audit M3 moved this off RAC `TagGroup`/`Tag` — built on
+    // `useGridListItem`, a `grid` of dismissible-token `row`s, the wrong model
+    // for a set of independent on/off filters — onto `ToggleButtonGroup` +
+    // `ToggleButton`: a `toolbar` named "Filter by tag" (the control's job,
+    // not the noun "Tags") containing real `button`s with `aria-pressed`,
+    // each named "<tag>, <count>" (a `sr-only` comma keeps "news" + "2" from
+    // concatenating into "news2" in the accessibility tree).
+    const tagFilter = page.getByRole('toolbar', { name: 'Filter by tag' });
+    await expect(tagFilter.getByRole('button', { name: /^test/ })).toBeVisible();
+    await expect(
+      tagFilter.getByRole('button', { name: /campaign-2026/ }),
+    ).toBeVisible();
   });
 
   test('search flattens the tree to a results list', async ({ page }) => {
     await gotoStudio(page);
-    await page.getByRole('searchbox', { name: /search blueprints/i }).fill('Landing');
+    // `templatestudio.tree.searchAriaLabel` reads "Filter blueprints" (the
+    // toolbar above's "Filter by tag" is the same vocabulary) — the tree's
+    // own search was never named "Search blueprints".
+    await page.getByRole('searchbox', { name: /filter blueprints/i }).fill('Landing');
 
     // Searching swaps the treegrid out for a flat listbox of matches — the
     // tree is gone entirely, not merely filtered in place.
@@ -147,10 +154,10 @@ test.describe('Studio Template Tree', () => {
 
   test('selecting a tag facet filters via repeatable ?tags=', async ({ page }) => {
     await gotoStudio(page);
-    // See the `row`-not-`tag` note on the browse test above.
+    // See the toolbar-of-toggle-buttons note on the browse test above.
     await page
-      .getByRole('grid', { name: 'Tags' })
-      .getByRole('row', { name: /campaign-2026/ })
+      .getByRole('toolbar', { name: 'Filter by tag' })
+      .getByRole('button', { name: /campaign-2026/ })
       .click();
 
     await expect(page).toHaveURL(/tags=campaign-2026/);
