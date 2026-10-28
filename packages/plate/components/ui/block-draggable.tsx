@@ -19,6 +19,7 @@ import { useSelected } from 'platejs/react';
 import { Button } from './button';
 import { Tooltip, TooltipContent, TooltipTrigger } from './tooltip';
 import { cn } from '../../lib/utils';
+import { canMoveBlocks, useBlockPolicy } from '../editor/plugins/block-policy';
 
 const UNDRAGGABLE_KEYS = [KEYS.column, KEYS.tr, KEYS.td];
 
@@ -84,6 +85,11 @@ function Draggable(props: PlateElementProps) {
 
   const isInColumn = path.length === 3;
   const isInTable = path.length === 4;
+  // No handle on a block the block policy refuses to move (a no-op unless
+  // one is registered). The wrapper stays: it also carries the context menu
+  // and the drop line.
+  useBlockPolicy();
+  const canMove = canMoveBlocks(editor, [[element, path]]);
 
   const [previewTop, setPreviewTop] = React.useState(0);
 
@@ -125,7 +131,7 @@ function Draggable(props: PlateElementProps) {
         setDragButtonTop(calcDragButtonTop(editor, element));
       }}
     >
-      {!isInTable && (
+      {!isInTable && canMove && (
         <Gutter>
           <div
             className={cn(

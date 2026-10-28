@@ -22,6 +22,10 @@ import {
   ContextMenuTrigger,
 } from './context-menu';
 import { useIsTouchDevice } from '../../hooks/use-is-touch-device';
+import {
+  canDeleteBlocks,
+  useBlockPolicy,
+} from '../editor/plugins/block-policy';
 
 type Value = 'askAI' | null;
 
@@ -83,6 +87,15 @@ export function BlockContextMenu({ children }: { children: React.ReactNode }) {
   const isOpen = openId === BLOCK_CONTEXT_MENU_ID;
   // Only offered when the AI chat plugin is part of the editor preset.
   const hasAI = !!editor.plugins[AIChatPlugin.key];
+  // Delete and Cut are not offered when the block policy refuses to delete a
+  // selected block (a no-op unless one is registered).
+  useBlockPolicy();
+  const canDelete =
+    isOpen &&
+    canDeleteBlocks(
+      editor,
+      editor.getApi(BlockSelectionPlugin).blockSelection.getNodes(),
+    );
 
   const handleTurnInto = React.useCallback(
     (type: string) => {
@@ -172,17 +185,19 @@ export function BlockContextMenu({ children }: { children: React.ReactNode }) {
           )}
 
           <ContextMenuGroup>
-            <ContextMenuItem
-              onClick={() => {
-                if (!copyBlocks(editor)) return;
-                editor
-                  .getTransforms(BlockSelectionPlugin)
-                  .blockSelection.removeNodes();
-                editor.tf.focus();
-              }}
-            >
-              Cut
-            </ContextMenuItem>
+            {canDelete && (
+              <ContextMenuItem
+                onClick={() => {
+                  if (!copyBlocks(editor)) return;
+                  editor
+                    .getTransforms(BlockSelectionPlugin)
+                    .blockSelection.removeNodes();
+                  editor.tf.focus();
+                }}
+              >
+                Cut
+              </ContextMenuItem>
+            )}
             <ContextMenuItem onClick={() => copyBlocks(editor)}>
               Copy
             </ContextMenuItem>
@@ -202,16 +217,18 @@ export function BlockContextMenu({ children }: { children: React.ReactNode }) {
               Duplicate
               {/* <ContextMenuShortcut>⌘ + D</ContextMenuShortcut> */}
             </ContextMenuItem>
-            <ContextMenuItem
-              onClick={() => {
-                editor
-                  .getTransforms(BlockSelectionPlugin)
-                  .blockSelection.removeNodes();
-                editor.tf.focus();
-              }}
-            >
-              Delete
-            </ContextMenuItem>
+            {canDelete && (
+              <ContextMenuItem
+                onClick={() => {
+                  editor
+                    .getTransforms(BlockSelectionPlugin)
+                    .blockSelection.removeNodes();
+                  editor.tf.focus();
+                }}
+              >
+                Delete
+              </ContextMenuItem>
+            )}
             <ContextMenuSub>
               <ContextMenuSubTrigger>Turn into</ContextMenuSubTrigger>
               <ContextMenuSubContent className="w-48">

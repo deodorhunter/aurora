@@ -34,6 +34,10 @@ import {
   TooltipTrigger,
 } from './tooltip';
 import { BlockInnerContainer } from './block-inner-container';
+import {
+  canDeleteBlocks,
+  useBlockPolicy,
+} from '../editor/plugins/block-policy';
 import { cn } from '../../lib/utils';
 
 export const ColumnElement = withHOC(
@@ -167,6 +171,11 @@ function ColumnFloatingToolbar({ children }: React.PropsWithChildren) {
     [],
   );
   const isFocusedLast = useFocusedLast();
+  // No delete button on a group the block policy refuses to delete (a no-op
+  // unless one is registered).
+  useBlockPolicy();
+  const path = editor.api.findPath(element);
+  const canDelete = !path || canDeleteBlocks(editor, [[element, path]]);
 
   const open = isFocusedLast && !readOnly && selected && isCollapsed;
 
@@ -224,10 +233,14 @@ function ColumnFloatingToolbar({ children }: React.PropsWithChildren) {
             <DoubleSideDoubleColumnOutlined />
           </Button>
 
-          <Separator orientation="vertical" className="mx-1 h-6" />
-          <Button variant="ghost" className="size-8" {...buttonProps}>
-            <Trash2Icon />
-          </Button>
+          {canDelete && (
+            <>
+              <Separator orientation="vertical" className="mx-1 h-6" />
+              <Button variant="ghost" className="size-8" {...buttonProps}>
+                <Trash2Icon />
+              </Button>
+            </>
+          )}
         </div>
       </PopoverContent>
     </Popover>
