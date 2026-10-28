@@ -7,6 +7,10 @@ import {
   useEditorRef,
   useEditorSelector,
 } from '@plone/plate/components/editor';
+import {
+  filterBlockSchema,
+  useBlockPolicy,
+} from '@plone/plate/components/editor/plugins/block-policy';
 import { PLONE_BLOCK_TYPE } from '@plone/helpers';
 import type { BlockConfigBase } from '@plone/types';
 import config from '@plone/registry';
@@ -14,6 +18,7 @@ import BlockSettingsForm from '../BlockSettingsForm';
 
 type SelectedNativeBlock = {
   key: string;
+  node: any;
   path: number[];
   data: Record<string, unknown> & { '@type': string };
   schema: BlockConfigBase['blockSchema'];
@@ -123,6 +128,7 @@ const getSelectedNativeBlock = (editor: any): SelectedNativeBlock | null => {
 
   return {
     key: path.join('-'),
+    node,
     path,
     data: {
       ...data,
@@ -135,6 +141,22 @@ const getSelectedNativeBlock = (editor: any): SelectedNativeBlock | null => {
 export function SidebarAfterEditable() {
   const editor = useEditorRef();
   const selectedNativeBlock = useEditorSelector(getSelectedNativeBlock, []);
+  // An integration may narrow the schema per block instance, or hide the
+  // form, through the block policy (a no-op unless one is registered).
+  // Subscribing re-renders the form when the policy changes.
+  const policy = useBlockPolicy();
+  const schema = React.useMemo(
+    () =>
+      selectedNativeBlock
+        ? filterBlockSchema(editor, selectedNativeBlock.schema, [
+            selectedNativeBlock.node,
+            selectedNativeBlock.path,
+          ])
+        : null,
+    // `policy` is read through `editor`; listed so a change re-filters.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [editor, selectedNativeBlock, policy],
+  );
 
   const onFormDataChange = React.useCallback(
     (next: Record<string, unknown>) => {
@@ -152,12 +174,12 @@ export function SidebarAfterEditable() {
     typeof document === 'undefined' ? null : document.getElementById('sidebar');
 
   if (!sidebar) return null;
-  if (!selectedNativeBlock) return null;
+  if (!selectedNativeBlock || !schema) return null;
 
   return createPortal(
     <BlockSettingsForm
       key={selectedNativeBlock.key}
-      schema={selectedNativeBlock.schema}
+      schema={schema}
       formData={selectedNativeBlock.data}
       onFormDataChange={onFormDataChange}
     />,

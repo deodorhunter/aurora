@@ -18,6 +18,7 @@ import config from '@plone/registry';
 import { PLONE_BLOCK_TYPE } from '@plone/helpers';
 import type { FormWidgetProps } from '@plone/types';
 import { BlockSelectionPlugin } from '@plone/plate/components/editor';
+import { BlockPolicyPlugin } from '@plone/plate/components/editor/plugins/block-policy';
 import { SidebarPlugin } from './SidebarPlugin';
 
 vi.mock('@plone/quanta', () => ({
@@ -50,6 +51,14 @@ const imageSchema = {
   required: [],
 };
 
+const teaserSchema = {
+  fieldsets: [
+    { id: 'default', title: 'Default', fields: ['headline', 'href'] },
+  ],
+  properties: { headline: { title: 'Headline' }, href: { title: 'Link' } },
+  required: [],
+};
+
 beforeAll(() => {
   config.registerDefaultWidget(InputWidget);
   (config as any).blocks = {
@@ -57,6 +66,11 @@ beforeAll(() => {
     blocksConfig: {
       ...(config as any).blocks?.blocksConfig,
       image: { id: 'image', blockSchema: imageSchema },
+      teaser: {
+        id: 'teaser',
+        blockSchema: ({ formData }: { formData: Record<string, unknown> }) =>
+          formData ? teaserSchema : teaserSchema,
+      },
     },
   };
 });
@@ -103,9 +117,14 @@ const nestedValue = () => [
 
 let editorRef: any = null;
 
-function Editor({ value }: { value: any[] }) {
+function Editor({ value, plugins = [] }: { value: any[]; plugins?: any[] }) {
   const editor = usePlateEditor({
-    plugins: [PloneBlockStubPlugin, BlockSelectionPlugin, SidebarPlugin],
+    plugins: [
+      PloneBlockStubPlugin,
+      BlockSelectionPlugin,
+      SidebarPlugin,
+      ...plugins,
+    ],
     value,
   });
   editorRef = editor;
@@ -213,5 +232,133 @@ describe('SidebarPlugin', () => {
 
     expect(editorRef.children[0].children[0].children[0].alt).toBe('Picked');
     expect(editorRef.children[0].alt).toBeUndefined();
+  });
+
+  describe('with a block policy', () => {
+    const teaser = (id: string) => ({
+      type: PLONE_BLOCK_TYPE,
+      id,
+      '@type': 'teaser',
+      headline: 'Hello',
+      href: '/a',
+      children: [{ text: '' }],
+    });
+
+    /** Keeps only `headline` on the block called `locked`. */
+    const narrowLocked = (schema: any, { node }: { node: any }) => {
+      if (node.id !== 'locked') return schema;
+      const resolve = (resolved: any) => ({
+        ...resolved,
+        fieldsets: resolved.fieldsets.map((fieldset: any) => ({
+          ...fieldset,
+          fields: fieldset.fields.filter((f: string) => f === 'headline'),
+        })),
+        properties: { headline: resolved.properties.headline },
+      });
+      return typeof schema === 'function'
+        ? (args: any) => resolve(schema(args))
+        : resolve(schema);
+    };
+
+    it('shows the whole schema when the policy is registered with its defaults', async () => {
+      render(
+        <Editor value={[teaser('locked')]} plugins={[BlockPolicyPlugin]} />,
+      );
+      selectIn([0, 0]);
+
+      expect(await screen.findByLabelText('Headline')).toBeInTheDocument();
+      expect(screen.getByLabelText('Link')).toBeInTheDocument();
+    });
+
+    it('shows the fields the filter keeps for this block instance', async () => {
+      render(
+        <Editor
+          value={[teaser('locked'), teaser('free')]}
+          plugins={[
+            BlockPolicyPlugin.configure({
+              options: { filterSchema: narrowLocked as any },
+            }),
+          ]}
+        />,
+      );
+      selectIn([0, 0]);
+
+      expect(await screen.findByLabelText('Headline')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Link')).toBeNull();
+    });
+
+    it('leaves another instance of the same block type alone', async () => {
+      render(
+        <Editor
+          value={[teaser('locked'), teaser('free')]}
+          plugins={[
+            BlockPolicyPlugin.configure({
+              options: { filterSchema: narrowLocked as any },
+            }),
+          ]}
+        />,
+      );
+      selectIn([1, 0]);
+
+      expect(await screen.findByLabelText('Link')).toBeInTheDocument();
+    });
+
+    it('passes the filter the block node with its id and path', async () => {
+      const filterSchema = vi.fn((schema: any) => schema);
+      render(
+        <Editor
+          value={nestedValue()}
+          plugins={[
+            BlockPolicyPlugin.configure({
+              options: { filterSchema: filterSchema as any },
+            }),
+          ]}
+        />,
+      );
+      selectIn([0, 0, 0, 0]);
+      await screen.findByLabelText('Alt text');
+
+      expect(filterSchema).toHaveBeenCalledWith(
+        imageSchema,
+        expect.objectContaining({
+          node: expect.objectContaining({ id: 'nested-img' }),
+          path: [0, 0, 0],
+        }),
+      );
+    });
+
+    it('shows no form when the filter returns null', async () => {
+      render(
+        <Editor
+          value={nestedValue()}
+          plugins={[
+            BlockPolicyPlugin.configure({
+              options: { filterSchema: (() => null) as any },
+            }),
+          ]}
+        />,
+      );
+      selectIn([1, 0]);
+      await settle();
+
+      expect(screen.queryByLabelText('Alt text')).toBeNull();
+      expect(sidebar).toBeEmptyDOMElement();
+    });
+
+    it('applies a filter set while the form is open', async () => {
+      render(
+        <Editor value={[teaser('locked')]} plugins={[BlockPolicyPlugin]} />,
+      );
+      selectIn([0, 0]);
+      expect(await screen.findByLabelText('Link')).toBeInTheDocument();
+
+      act(() => {
+        editorRef.setOption(BlockPolicyPlugin, 'filterSchema', narrowLocked);
+      });
+      await settle();
+
+      expect(screen.getByLabelText('Headline')).toBeInTheDocument();
+      expect(screen.queryByLabelText('Link')).toBeNull();
+    });
   });
 });
