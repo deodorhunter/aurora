@@ -20,6 +20,7 @@ import {
   canDeleteBlocks,
   canMoveBlocks,
   filterBlockSchema,
+  getBlockPolicy,
 } from '../editor/plugins/block-policy';
 
 const p = (id: string, text: string) => ({
@@ -64,18 +65,28 @@ describe('block policy helpers', () => {
     render(<Editor plugins={[]} />);
     const locked = entryOf('locked');
 
-    expect(canDeleteBlocks(editorRef, [locked])).toBe(true);
-    expect(canMoveBlocks(editorRef, [locked])).toBe(true);
+    expect(
+      canDeleteBlocks(editorRef, [locked], getBlockPolicy(editorRef)),
+    ).toBe(true);
+    expect(canMoveBlocks(editorRef, [locked], getBlockPolicy(editorRef))).toBe(
+      true,
+    );
     const schema = { properties: {} };
-    expect(filterBlockSchema(editorRef, schema, locked)).toBe(schema);
+    expect(
+      filterBlockSchema(editorRef, schema, locked, getBlockPolicy(editorRef)),
+    ).toBe(schema);
   });
 
   it('allow everything when the policy keeps its defaults', () => {
     render(<Editor plugins={[BlockPolicyPlugin]} />);
     const locked = entryOf('locked');
 
-    expect(canDeleteBlocks(editorRef, [locked])).toBe(true);
-    expect(canMoveBlocks(editorRef, [locked])).toBe(true);
+    expect(
+      canDeleteBlocks(editorRef, [locked], getBlockPolicy(editorRef)),
+    ).toBe(true);
+    expect(canMoveBlocks(editorRef, [locked], getBlockPolicy(editorRef))).toBe(
+      true,
+    );
   });
 
   it('answer from the policy a component passes in, over the editor’s', () => {
@@ -98,11 +109,19 @@ describe('block policy helpers', () => {
   it('answer for every entry when the policy is set', () => {
     render(<Editor plugins={[lockLocked]} />);
 
-    expect(canDeleteBlocks(editorRef, [entryOf('free')])).toBe(true);
     expect(
-      canDeleteBlocks(editorRef, [entryOf('free'), entryOf('locked')]),
+      canDeleteBlocks(editorRef, [entryOf('free')], getBlockPolicy(editorRef)),
+    ).toBe(true);
+    expect(
+      canDeleteBlocks(
+        editorRef,
+        [entryOf('free'), entryOf('locked')],
+        getBlockPolicy(editorRef),
+      ),
     ).toBe(false);
-    expect(canMoveBlocks(editorRef, [entryOf('locked')])).toBe(false);
+    expect(
+      canMoveBlocks(editorRef, [entryOf('locked')], getBlockPolicy(editorRef)),
+    ).toBe(false);
   });
 });
 
@@ -149,6 +168,20 @@ describe('block context menu', () => {
     expect(screen.queryByRole('menuitem', { name: 'Cut' })).toBeNull();
     // The rest of the menu is still there.
     expect(screen.getByRole('menuitem', { name: 'Copy' })).toBeVisible();
+  });
+
+  it('follows the block selection while the menu is open', async () => {
+    // The menu reads the selection through `selectedIds`, an input the React
+    // Compiler sees (the app compiles this file; these tests do not).
+    render(<Editor plugins={[...BlockMenuKit, lockLocked]} />);
+    await openMenuOn('free');
+    expect(screen.getByRole('menuitem', { name: 'Delete' })).toBeVisible();
+
+    act(() => {
+      editorRef.getApi(BlockSelectionPlugin).blockSelection.set('locked');
+    });
+
+    expect(screen.queryByRole('menuitem', { name: 'Delete' })).toBeNull();
   });
 
   it('offers Delete on every block without a policy', async () => {

@@ -78,6 +78,22 @@ async function pasteBlocks(editor: SlateEditor) {
   pasteSelectedBlocks(editor, { clipboardData: data } as ClipboardEvent);
 }
 
+/** The block-selected nodes, by id, in document order. */
+function selectedEntries(
+  editor: SlateEditor,
+  selectedIds: ReadonlySet<string> | undefined,
+) {
+  if (!selectedIds?.size) return [];
+  return [
+    ...editor.api.nodes({
+      at: [],
+      match: (node) =>
+        typeof (node as { id?: unknown }).id === 'string' &&
+        selectedIds.has((node as { id: string }).id),
+    }),
+  ];
+}
+
 export function BlockContextMenu({ children }: { children: React.ReactNode }) {
   const { api, editor } = useEditorPlugin(BlockMenuPlugin);
   const [value, setValue] = React.useState<Value>(null);
@@ -89,14 +105,13 @@ export function BlockContextMenu({ children }: { children: React.ReactNode }) {
   const hasAI = !!editor.plugins[AIChatPlugin.key];
   // Delete and Cut are not offered when the block policy refuses to delete a
   // selected block (a no-op unless one is registered).
+  // The selection is read through its option, not through `editor`, so it
+  // is an input the React Compiler sees: the answer follows the selection.
   const policy = useBlockPolicy();
+  const selectedIds = usePluginOption(BlockSelectionPlugin, 'selectedIds');
   const canDelete =
     isOpen &&
-    canDeleteBlocks(
-      editor,
-      editor.getApi(BlockSelectionPlugin).blockSelection.getNodes(),
-      policy,
-    );
+    canDeleteBlocks(editor, selectedEntries(editor, selectedIds), policy);
 
   const handleTurnInto = React.useCallback(
     (type: string) => {

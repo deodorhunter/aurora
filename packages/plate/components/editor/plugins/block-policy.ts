@@ -67,39 +67,49 @@ export const BaseBlockPolicyPlugin = createSlatePlugin({
 
 export const BlockPolicyPlugin = toPlatePlugin(BaseBlockPolicyPlugin);
 
-const policyOf = (editor: SlateEditor): BlockPolicyOptions | null =>
+/**
+ * The policy as `editor` holds it now, or `null` when the plugin is not
+ * registered. **For non-React callers only** (a transform, a test). A component
+ * reads it with {@link useBlockPolicy} instead: the React Compiler memoizes a
+ * call on its arguments, and a policy read through `editor` is not one of them,
+ * so the component would keep its first answer.
+ */
+export const getBlockPolicy = (
+  editor: SlateEditor,
+): BlockPolicyOptions | null =>
   editor.plugins?.[BLOCK_POLICY_KEY]
     ? (editor.getOptions(BaseBlockPolicyPlugin) as BlockPolicyOptions)
     : null;
+
+/**
+ * The policy argument every helper below requires: from
+ * {@link useBlockPolicy} in a component, from {@link getBlockPolicy}
+ * elsewhere. Required rather than defaulted so that a component which forgets
+ * to pass its subscribed policy fails typecheck instead of going stale.
+ */
+type PolicyArg = BlockPolicyOptions | null | undefined;
 
 const contextOf = (
   editor: SlateEditor,
   [node, path]: NodeEntry,
 ): BlockPolicyContext => ({ editor, node: node as TElement, path });
 
-/**
- * Whether the UI may offer to delete every one of `entries`.
- *
- * A component passes the `policy` it got from {@link useBlockPolicy}: the
- * React Compiler memoizes a call on its arguments, and a policy read through
- * `editor` alone is not one of them, so the first answer would stick.
- */
+/** Whether the UI may offer to delete every one of `entries`. */
 export function canDeleteBlocks(
   editor: SlateEditor,
   entries: readonly NodeEntry[],
-  policy: BlockPolicyOptions | null | undefined = policyOf(editor),
+  policy: PolicyArg,
 ): boolean {
   const canDelete = policy?.canDelete;
   if (!canDelete) return true;
   return entries.every((entry) => canDelete(contextOf(editor, entry)));
 }
 
-/** Whether the UI may offer to move every one of `entries`. See
- * {@link canDeleteBlocks} on `policy`. */
+/** Whether the UI may offer to move every one of `entries`. */
 export function canMoveBlocks(
   editor: SlateEditor,
   entries: readonly NodeEntry[],
-  policy: BlockPolicyOptions | null | undefined = policyOf(editor),
+  policy: PolicyArg,
 ): boolean {
   const canMove = policy?.canMove;
   if (!canMove) return true;
@@ -114,7 +124,7 @@ export function filterBlockSchema<S extends BlockPolicySchema>(
   editor: SlateEditor,
   schema: S,
   entry: NodeEntry,
-  policy: BlockPolicyOptions | null | undefined = policyOf(editor),
+  policy: PolicyArg,
 ): S | null {
   const filterSchema = policy?.filterSchema;
   if (!filterSchema) return schema;
