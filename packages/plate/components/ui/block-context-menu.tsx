@@ -89,12 +89,13 @@ export function BlockContextMenu({ children }: { children: React.ReactNode }) {
   const hasAI = !!editor.plugins[AIChatPlugin.key];
   // Delete and Cut are not offered when the block policy refuses to delete a
   // selected block (a no-op unless one is registered).
-  useBlockPolicy();
+  const policy = useBlockPolicy();
   const canDelete =
     isOpen &&
     canDeleteBlocks(
       editor,
       editor.getApi(BlockSelectionPlugin).blockSelection.getNodes(),
+      policy,
     );
 
   const handleTurnInto = React.useCallback(

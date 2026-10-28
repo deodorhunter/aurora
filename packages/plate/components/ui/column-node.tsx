@@ -17,6 +17,7 @@ import {
   useEditorSelector,
   useElement,
   useFocusedLast,
+  usePath,
   usePluginOption,
   useReadOnly,
   useRemoveNodeButton,
@@ -36,6 +37,7 @@ import {
 import { BlockInnerContainer } from './block-inner-container';
 import {
   canDeleteBlocks,
+  canMoveBlocks,
   useBlockPolicy,
 } from '../editor/plugins/block-policy';
 import { cn } from '../../lib/utils';
@@ -45,6 +47,14 @@ export const ColumnElement = withHOC(
   function ColumnElement(props: PlateElementProps<TColumnElement>) {
     const { width } = props.element;
     const readOnly = useReadOnly();
+    // No drag handle on a column the block policy refuses to move (a no-op
+    // unless one is registered).
+    const policy = useBlockPolicy();
+    const canMove = canMoveBlocks(
+      props.editor,
+      [[props.element, props.path]],
+      policy,
+    );
     const isSelectionAreaVisible = usePluginOption(
       BlockSelectionPlugin,
       'isSelectionAreaVisible',
@@ -67,7 +77,7 @@ export const ColumnElement = withHOC(
         className="block-column_group__column group/column"
         style={{ width: width ?? '100%' }}
       >
-        {!readOnly && !isSelectionAreaVisible && (
+        {!readOnly && !isSelectionAreaVisible && canMove && (
           <div
             ref={handleRef}
             className={cn(
@@ -173,9 +183,9 @@ function ColumnFloatingToolbar({ children }: React.PropsWithChildren) {
   const isFocusedLast = useFocusedLast();
   // No delete button on a group the block policy refuses to delete (a no-op
   // unless one is registered).
-  useBlockPolicy();
-  const path = editor.api.findPath(element);
-  const canDelete = !path || canDeleteBlocks(editor, [[element, path]]);
+  const policy = useBlockPolicy();
+  const path = usePath();
+  const canDelete = !path || canDeleteBlocks(editor, [[element, path]], policy);
 
   const open = isFocusedLast && !readOnly && selected && isCollapsed;
 

@@ -148,13 +148,13 @@ export function SidebarAfterEditable() {
   const schema = React.useMemo(
     () =>
       selectedNativeBlock
-        ? filterBlockSchema(editor, selectedNativeBlock.schema, [
-            selectedNativeBlock.node,
-            selectedNativeBlock.path,
-          ])
+        ? filterBlockSchema(
+            editor,
+            selectedNativeBlock.schema,
+            [selectedNativeBlock.node, selectedNativeBlock.path],
+            policy,
+          )
         : null,
-    // `policy` is read through `editor`; listed so a change re-filters.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [editor, selectedNativeBlock, policy],
   );
 

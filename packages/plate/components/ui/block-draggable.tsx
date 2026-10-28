@@ -88,8 +88,8 @@ function Draggable(props: PlateElementProps) {
   // No handle on a block the block policy refuses to move (a no-op unless
   // one is registered). The wrapper stays: it also carries the context menu
   // and the drop line.
-  useBlockPolicy();
-  const canMove = canMoveBlocks(editor, [[element, path]]);
+  const policy = useBlockPolicy();
+  const canMove = canMoveBlocks(editor, [[element, path]], policy);
 
   const [previewTop, setPreviewTop] = React.useState(0);
 

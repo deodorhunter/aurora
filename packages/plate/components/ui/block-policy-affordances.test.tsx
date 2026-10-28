@@ -78,6 +78,23 @@ describe('block policy helpers', () => {
     expect(canMoveBlocks(editorRef, [locked])).toBe(true);
   });
 
+  it('answer from the policy a component passes in, over the editor’s', () => {
+    // Components pass the policy they subscribed to (`useBlockPolicy`): the
+    // React Compiler memoizes the call on its arguments, so a policy read
+    // only through `editor` would keep the first answer.
+    render(<Editor plugins={[BlockPolicyPlugin]} />);
+    const locked = entryOf('locked');
+    const refuse = {
+      canDelete: () => false,
+      canMove: () => false,
+      filterSchema: () => null,
+    };
+
+    expect(canDeleteBlocks(editorRef, [locked], refuse)).toBe(false);
+    expect(canMoveBlocks(editorRef, [locked], refuse)).toBe(false);
+    expect(filterBlockSchema(editorRef, {}, locked, refuse)).toBeNull();
+  });
+
   it('answer for every entry when the policy is set', () => {
     render(<Editor plugins={[lockLocked]} />);
 
@@ -199,6 +216,37 @@ describe('column group delete button', () => {
         children: [p(`${id}-p2`, 'B')],
       },
     ],
+  });
+
+  const columnGrips = () =>
+    document.querySelectorAll('svg.lucide-grip-horizontal').length;
+
+  it('offers a drag handle on each column without a policy', () => {
+    render(
+      <Editor
+        plugins={[...DndKit, ...ColumnKit]}
+        initialValue={[group('g')]}
+      />,
+    );
+
+    expect(columnGrips()).toBe(2);
+  });
+
+  it('offers no column drag handle where the policy refuses the move', () => {
+    render(
+      <Editor
+        plugins={[
+          ...DndKit,
+          ...ColumnKit,
+          BlockPolicyPlugin.configure({
+            options: { canMove: ({ node }) => node.id !== 'g-a' },
+          }),
+        ]}
+        initialValue={[group('g')]}
+      />,
+    );
+
+    expect(columnGrips()).toBe(1);
   });
 
   const deleteButton = () =>

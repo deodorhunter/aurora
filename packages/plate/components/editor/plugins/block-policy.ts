@@ -77,22 +77,31 @@ const contextOf = (
   [node, path]: NodeEntry,
 ): BlockPolicyContext => ({ editor, node: node as TElement, path });
 
-/** Whether the UI may offer to delete every one of `entries`. */
+/**
+ * Whether the UI may offer to delete every one of `entries`.
+ *
+ * A component passes the `policy` it got from {@link useBlockPolicy}: the
+ * React Compiler memoizes a call on its arguments, and a policy read through
+ * `editor` alone is not one of them, so the first answer would stick.
+ */
 export function canDeleteBlocks(
   editor: SlateEditor,
   entries: readonly NodeEntry[],
+  policy: BlockPolicyOptions | null | undefined = policyOf(editor),
 ): boolean {
-  const canDelete = policyOf(editor)?.canDelete;
+  const canDelete = policy?.canDelete;
   if (!canDelete) return true;
   return entries.every((entry) => canDelete(contextOf(editor, entry)));
 }
 
-/** Whether the UI may offer to move every one of `entries`. */
+/** Whether the UI may offer to move every one of `entries`. See
+ * {@link canDeleteBlocks} on `policy`. */
 export function canMoveBlocks(
   editor: SlateEditor,
   entries: readonly NodeEntry[],
+  policy: BlockPolicyOptions | null | undefined = policyOf(editor),
 ): boolean {
-  const canMove = policyOf(editor)?.canMove;
+  const canMove = policy?.canMove;
   if (!canMove) return true;
   return entries.every((entry) => canMove(contextOf(editor, entry)));
 }
@@ -105,15 +114,17 @@ export function filterBlockSchema<S extends BlockPolicySchema>(
   editor: SlateEditor,
   schema: S,
   entry: NodeEntry,
+  policy: BlockPolicyOptions | null | undefined = policyOf(editor),
 ): S | null {
-  const filterSchema = policyOf(editor)?.filterSchema;
+  const filterSchema = policy?.filterSchema;
   if (!filterSchema) return schema;
   return filterSchema(schema, contextOf(editor, entry));
 }
 
 /**
- * Subscribes the calling component to the policy, so it re-renders when an
- * option changes. `undefined` when the plugin is not registered.
+ * The policy, subscribed: the calling component re-renders when an option
+ * changes. `undefined` when the plugin is not registered. Pass it on to the
+ * helpers above.
  */
 export function useBlockPolicy(): BlockPolicyOptions | undefined {
   return usePluginOption(BlockPolicyPlugin, 'state') as
